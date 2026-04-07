@@ -35,3 +35,10 @@ def test_cli_prints_summary(tmp_path):
     )
     assert "Generated" in result.stdout
     assert "classes" in result.stdout
+
+
+def test_arco_import_hook_exists():
+    """Verify arco.py has the generated import at the bottom."""
+    arco_path = PROJECT_ROOT / "python25" / "arco.py"
+    content = arco_path.read_text()
+    assert "from arco_generated import *" in content
