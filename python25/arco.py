@@ -5,7 +5,7 @@ import math
 
 sys.path.append(
     os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../../../o2/o2litepy/src")))
+        os.path.join(os.path.dirname(__file__), "../../o2/o2litepy/src")))
 
 from o2lite import O2lite
 
