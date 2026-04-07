@@ -22,11 +22,15 @@ def _rate_constant(output_rate: str) -> str:
 
 
 def _class_name(sig_name: str) -> str:
-    """Convert a ugen name like 'sine' or 'sineb' to a class name like 'Sine'."""
-    return sig_name.capitalize()
+    """Convert a ugen name like 'sine' or 'sineb' to a class name like 'Sine'.
+
+    Uses upper() on first char only, preserving the rest (unlike capitalize()
+    which lowercases everything after the first character).
+    """
+    return sig_name[0].upper() + sig_name[1:]
 
 
-def _needs_rate_check(param: Param, output_rate: str) -> bool:
+def _needs_rate_check(param: Param) -> bool:
     """Return True if this param requires a runtime rate validation check.
 
     Only single-fixed rates ('a' or 'b') get a check; 'ab' (flexible) and
@@ -40,7 +44,7 @@ def _build_rate_checks(sig: Signature) -> list[str]:
     lines = []
     rate_const = _rate_constant(sig.output_rate)
     for param in sig.params:
-        if _needs_rate_check(param, sig.output_rate):
+        if _needs_rate_check(param):
             # Determine which rate this param must be
             if param.rate == "a":
                 check_const = "A_RATE"
