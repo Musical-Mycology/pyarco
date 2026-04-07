@@ -76,7 +76,7 @@ def parse_ugen_file(path: Path) -> list[Signature]:
         if in_faust:
             declare_lines.append(stripped)
         else:
-            if stripped and not stripped.startswith("//"):
+            if stripped and not stripped.startswith(("#", "//")):
                 sig_lines.append(stripped)
 
     interpolated = []
