@@ -1,0 +1,5 @@
+lowpass(input: a, cutoff: ab): a
+lowpassb(input: b, cutoff: b): b
+FAUST
+declare terminate "input";
+process(input, cutoff) = fi.lowpass(1, cutoff, input);

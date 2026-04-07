@@ -1,0 +1,4 @@
+noisegate(input: a, threshold: b, attack: b, hold: b, release: b): a
+FAUST
+declare interpolated "threshold attack hold release";
+process(input, threshold, attack, hold, release) = input;

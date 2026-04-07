@@ -1,0 +1,3 @@
+sttest(input: 2a, hz1: c, hz2: c): 2a
+FAUST
+process(input, hz1, hz2) = input;

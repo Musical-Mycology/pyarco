@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -57,3 +58,42 @@ def parse_signature_line(line: str) -> Signature:
 
     return Signature(name=name, params=params, output_rate=output_rate,
                      output_chans=output_chans)
+
+
+def parse_ugen_file(path: Path) -> list[Signature]:
+    """Parse a .ugen file and return a list of Signature objects."""
+    text = path.read_text()
+    lines = text.splitlines()
+
+    sig_lines = []
+    declare_lines = []
+    in_faust = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "FAUST":
+            in_faust = True
+            continue
+        if in_faust:
+            declare_lines.append(stripped)
+        else:
+            if stripped and not stripped.startswith("//"):
+                sig_lines.append(stripped)
+
+    interpolated = []
+    terminate = []
+    for line in declare_lines:
+        m = re.match(r'^declare\s+interpolated\s+"([^"]+)"', line)
+        if m:
+            interpolated = m.group(1).split()
+        m = re.match(r'^declare\s+terminate\s+"([^"]+)"', line)
+        if m:
+            terminate = m.group(1).split()
+
+    signatures = []
+    for line in sig_lines:
+        sig = parse_signature_line(line)
+        sig.interpolated = list(interpolated)
+        sig.terminate = list(terminate)
+        signatures.append(sig)
+
+    return signatures

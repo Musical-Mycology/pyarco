@@ -1,0 +1,5 @@
+sine(freq: ab, amp: ab): a
+sineb(freq: b, amp: b): b
+FAUST
+declare interpolated "freq amp";
+process(freq, amp) = os.osc(freq) * amp;

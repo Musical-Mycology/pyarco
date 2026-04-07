@@ -1,4 +1,8 @@
-from tools.ugen_parser import Param, Signature, parse_signature_line
+from pathlib import Path
+
+from tools.ugen_parser import Param, Signature, parse_signature_line, parse_ugen_file
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_param_defaults():
@@ -74,3 +78,47 @@ def test_parse_no_spaces():
     assert sig.name == "sine"
     assert sig.params[0] == Param("freq", "ab")
     assert sig.output_rate == "a"
+
+
+def test_parse_sine_ugen():
+    sigs = parse_ugen_file(FIXTURES / "sine.ugen")
+    assert len(sigs) == 2
+    assert sigs[0].name == "sine"
+    assert sigs[0].output_rate == "a"
+    assert sigs[0].interpolated == ["freq", "amp"]
+    assert sigs[1].name == "sineb"
+    assert sigs[1].output_rate == "b"
+    assert sigs[1].interpolated == ["freq", "amp"]
+
+
+def test_parse_lowpass_ugen():
+    sigs = parse_ugen_file(FIXTURES / "lowpass.ugen")
+    assert len(sigs) == 2
+    assert sigs[0].name == "lowpass"
+    assert sigs[0].terminate == ["input"]
+    assert sigs[1].name == "lowpassb"
+    assert sigs[1].terminate == ["input"]
+
+
+def test_parse_overdrive_ugen():
+    sigs = parse_ugen_file(FIXTURES / "overdrive.ugen")
+    assert len(sigs) == 1
+    assert sigs[0].name == "overdrive"
+    assert sigs[0].output_chans == 2
+    assert sigs[0].params[0] == Param("snd", "a", chans=2)
+    assert sigs[0].interpolated == ["gain", "tone", "volume"]
+
+
+def test_parse_sttest_ugen():
+    sigs = parse_ugen_file(FIXTURES / "sttest.ugen")
+    assert len(sigs) == 1
+    assert sigs[0].params[1] == Param("hz1", "c")
+    assert sigs[0].interpolated == []
+
+
+def test_parse_noisegate_ugen():
+    sigs = parse_ugen_file(FIXTURES / "noisegate.ugen")
+    assert len(sigs) == 1
+    assert sigs[0].name == "noisegate"
+    assert len(sigs[0].params) == 5
+    assert sigs[0].interpolated == ["threshold", "attack", "hold", "release"]
