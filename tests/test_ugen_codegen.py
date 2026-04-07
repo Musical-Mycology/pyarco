@@ -46,3 +46,70 @@ def test_generate_lowpass_audio_rate_check():
     assert "if not isinstance(input, (int, float)) and input.rate != A_RATE:" in code
     # cutoff: ab does NOT get checked
     assert "cutoff.rate" not in code
+
+
+def test_generate_fixed_channels():
+    sig = Signature(
+        name="overdrive",
+        params=[
+            Param("snd", "a", chans=2),
+            Param("gain", "b"),
+            Param("tone", "b"),
+            Param("volume", "b"),
+        ],
+        output_rate="a",
+        output_chans=2,
+    )
+    code = generate_class(sig)
+    assert "class Overdrive(Ugen):" in code
+    # No chans parameter in __init__
+    assert "chans=None" not in code
+    assert "def __init__(self, snd, gain, tone, volume):" in code
+    # Fixed chans in super call
+    assert '"Overdrive", 2, A_RATE' in code
+    # No max_chans computation
+    assert "max_chans" not in code
+
+
+def test_generate_constant_params():
+    sig = Signature(
+        name="sttest",
+        params=[
+            Param("input", "a", chans=2),
+            Param("hz1", "c"),
+            Param("hz2", "c"),
+        ],
+        output_rate="a",
+        output_chans=2,
+    )
+    code = generate_class(sig)
+    assert "class Sttest(Ugen):" in code
+    # Constant params map to "f" in types string
+    assert '"Uff"' in code
+    # No rate check on constant params
+    assert "hz1.rate" not in code
+    assert "hz2.rate" not in code
+
+
+def test_generate_noisegate_all_block_controls():
+    sig = Signature(
+        name="noisegate",
+        params=[
+            Param("input", "a"),
+            Param("threshold", "b"),
+            Param("attack", "b"),
+            Param("hold", "b"),
+            Param("release", "b"),
+        ],
+        output_rate="a",
+    )
+    code = generate_class(sig)
+    assert "class Noisegate(Ugen):" in code
+    assert '"UUUUU"' in code
+    # input: a gets audio rate check
+    assert "input.rate != A_RATE" in code
+    # block-rate params get block rate checks
+    assert "threshold.rate != B_RATE" in code
+    assert "attack.rate != B_RATE" in code
+    assert "hold.rate != B_RATE" in code
+    assert "release.rate != B_RATE" in code
