@@ -190,15 +190,16 @@ def pan_45(x, gain=1):
 # --------------- O2 connection ---------------
 
 o2lite = None
+zero_ugen = None
+zerob_ugen = None
+input_ugen = None
+output_ugen = None
 
 
 def initialize_o2lite(input_chans=2, output_chans=2):
     global o2lite
     if o2lite is None:
         o2lite = O2lite()
-
-        # Register actl service and handlers BEFORE connecting
-        o2lite.set_services("actl")
 
         _reset_received = [False]
 
@@ -224,26 +225,14 @@ def initialize_o2lite(input_chans=2, output_chans=2):
             time.sleep(0.01)
         print("Connected to ensemble", ENSEMBLE, "O2time", o2lite.time_get())
 
-        # Tell Arco to send callbacks to our actl service, then reset
-        o2lite.send_cmd("/arco/ctrl", 0, "s", "actl")
-        o2lite.send_cmd("/arco/reset", 0, "")
-
-        # Wait for reset confirmation
-        for _ in range(500):
-            o2lite.poll()
-            if _reset_received[0]:
-                break
-            time.sleep(0.01)
-        else:
-            print("WARNING: Arco reset confirmation not received")
-
-        if _reset_received[0]:
-            # Create the four system ugens (IDs 0-3)
-            _zero = Zero(ZERO_ID)
-            _zerob = Zerob(ZEROB_ID)
-            _input = Thru(_zero, input_chans, INPUT_ID)
-            _output = Sum(output_chans, True, OUTPUT_ID)
-            print("System ugens created (Zero, Zerob, Input, Output)")
+        # Create the four system ugens (IDs 0-3)
+        # These must exist for play()/mute() to work (they use OUTPUT_ID=3)
+        global zero_ugen, zerob_ugen, input_ugen, output_ugen
+        zero_ugen = Zero(ZERO_ID)
+        zerob_ugen = Zerob(ZEROB_ID)
+        input_ugen = Thru(zero_ugen, input_chans, INPUT_ID)
+        output_ugen = Sum(output_chans, True, OUTPUT_ID)
+        print("System ugens created (Zero, Zerob, Input, Output)")
 
 
 def max_chans(chans, ugen):
@@ -376,7 +365,10 @@ class Ugen:
         initialize_o2lite()
 
         inputs_ = list(inputs_)  # replace with **kwargs?
-        self.id = Ugen.uid_pool.request_slot()
+        # If subclass pre-set self.id (e.g. system ugens with fixed IDs),
+        # keep it; otherwise allocate from pool
+        if not hasattr(self, 'id') or self.id is None:
+            self.id = Ugen.uid_pool.request_slot()
         self.classname = classname_
         self.chans = chans_
         self.rate = rate_
