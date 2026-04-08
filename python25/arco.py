@@ -198,7 +198,8 @@ def initialize_o2lite():
         o2lite = O2lite()
         o2lite.initialize(ENSEMBLE, debug_flags="a")
         while o2lite.time_get() < 0:
-            o2lite.sleep(1)
+            o2lite.poll()
+            time.sleep(0.01)
         print("Connected to ensemble", ENSEMBLE, "O2time", o2lite.time_get())
 
 
