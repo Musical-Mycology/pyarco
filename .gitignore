@@ -1,2 +1,11 @@
 # Generated files
 python25/arco_generated.py
+
+# Python cache
+__pycache__/
+
+# IDE / tool config
+.claude/
+
+# Archives
+*.zip
