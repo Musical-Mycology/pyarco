@@ -129,7 +129,7 @@ class DemoState:
                 initialize_o2lite()
                 self.connected = True
             except Exception as e:
-                ui.notify(f"Connection failed: {e}", type='negative')
+                self._connect_error = str(e)
         return self.connected
 
 
@@ -1358,16 +1358,17 @@ def build_page():
 
             async def do_connect():
                 conn_label.set_text('Connecting...')
-                try:
-                    await run.io_bound(state.connect)
-                    if state.connected:
-                        conn_label.set_text('Connected')
-                        ui.notify('Connected to Arco server', type='positive')
-                    else:
-                        conn_label.set_text('Disconnected')
-                except Exception as e:
+                state._connect_error = None
+                await run.io_bound(state.connect)
+                if state.connected:
+                    conn_label.set_text('Connected')
+                    ui.notify('Connected to Arco server', type='positive')
+                elif state._connect_error:
                     conn_label.set_text('Disconnected')
-                    ui.notify(f'Connection failed: {e}', type='negative')
+                    ui.notify(f'Connection failed: {state._connect_error}',
+                              type='negative')
+                else:
+                    conn_label.set_text('Disconnected')
 
             ui.button('Connect', on_click=do_connect) \
                 .props('color=white text-color=primary dense')
