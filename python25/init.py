@@ -219,11 +219,11 @@ def sine_demo():
 
         def on_freq_change(e):
             if ugen_ref['obj'] and ugen_ref['playing']:
-                ugen_ref['obj'].set('freq', e.value)
+                ugen_ref['obj'].set('freq', e.args)
 
         def on_amp_change(e):
             if ugen_ref['obj'] and ugen_ref['playing']:
-                ugen_ref['obj'].set('amp', e.value)
+                ugen_ref['obj'].set('amp', e.args)
 
         freq_slider.on('update:model-value', on_freq_change)
         amp_slider.on('update:model-value', on_amp_change)
@@ -294,11 +294,11 @@ def tableosc_demo():
 
         def on_freq(e):
             if ugen_ref['obj'] and ugen_ref['playing']:
-                ugen_ref['obj'].set('freq', e.value)
+                ugen_ref['obj'].set('freq', e.args)
 
         def on_amp(e):
             if ugen_ref['obj'] and ugen_ref['playing']:
-                ugen_ref['obj'].set('amp', e.value)
+                ugen_ref['obj'].set('amp', e.args)
 
         freq_slider.on('update:model-value', on_freq)
         amp_slider.on('update:model-value', on_amp)
@@ -361,11 +361,11 @@ def lowpass_demo():
 
         def on_cutoff(e):
             if refs['filter'] and refs['playing']:
-                refs['filter'].set('cutoff', e.value)
+                refs['filter'].set('cutoff', e.args)
 
         def on_src(e):
             if refs['source'] and refs['playing']:
-                refs['source'].set('freq', e.value)
+                refs['source'].set('freq', e.args)
 
         cutoff_slider.on('update:model-value', on_cutoff)
         src_freq.on('update:model-value', on_src)
@@ -431,11 +431,11 @@ def reson_demo():
 
         def on_center(e):
             if refs['filter'] and refs['playing']:
-                refs['filter'].set('center', e.value)
+                refs['filter'].set('center', e.args)
 
         def on_q(e):
             if refs['filter'] and refs['playing']:
-                refs['filter'].set('q', e.value)
+                refs['filter'].set('q', e.args)
 
         center_slider.on('update:model-value', on_center)
         q_slider.on('update:model-value', on_q)
@@ -504,11 +504,11 @@ def allpass_demo():
 
         def on_dur(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set('dur', e.value)
+                refs['effect'].set('dur', e.args)
 
         def on_fb(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set('fb', e.value)
+                refs['effect'].set('fb', e.args)
 
         dur_slider.on('update:model-value', on_dur)
         fb_slider.on('update:model-value', on_fb)
@@ -577,11 +577,11 @@ def delay_demo():
 
         def on_dur(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set('dur', e.value)
+                refs['effect'].set('dur', e.args)
 
         def on_fb(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set('fb', e.value)
+                refs['effect'].set('fb', e.args)
 
         dur_slider.on('update:model-value', on_dur)
         fb_slider.on('update:model-value', on_fb)
@@ -648,7 +648,7 @@ def blend_demo():
 
         def on_blend(e):
             if refs['blend'] and refs['playing']:
-                refs['blend'].set('b', e.value)
+                refs['blend'].set('b', e.args)
 
         b_slider.on('update:model-value', on_blend)
 
@@ -706,7 +706,7 @@ def pitch_shift_demo():
 
         def on_ratio(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set_ratio(e.value)
+                refs['effect'].set_ratio(e.args)
 
         ratio_slider.on('update:model-value', on_ratio)
 
@@ -785,11 +785,11 @@ def granstream_demo():
 
         def on_density(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set_density(e.value)
+                refs['effect'].set_density(e.args)
 
         def on_dur(e):
             if refs['effect'] and refs['playing']:
-                refs['effect'].set_dur(e.value)
+                refs['effect'].set_dur(e.args)
 
         def on_ratio(e):
             if refs['effect'] and refs['playing']:
