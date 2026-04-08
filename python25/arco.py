@@ -230,7 +230,18 @@ def initialize_o2lite(input_chans=2, output_chans=2):
         # First free the host's Thru, then create our Sum.
         o2lite.send_cmd("/arco/free", 0, "i", OUTPUT_ID)
         output_ugen = Sum(output_chans, True, OUTPUT_ID)
-        print("System ugens initialized, output Sum created at ID", OUTPUT_ID)
+
+        # Open audio with default devices (-1 = system default)
+        # params: in_id, out_id, in_chans, out_chans, latency_ms, buffer_size
+        o2lite.send_cmd("/arco/open", 0, "iiiiii",
+                        -1, -1, input_chans, output_chans, 10, 128)
+
+        # Poll to let audio start
+        for _ in range(100):
+            o2lite.poll()
+            time.sleep(0.01)
+
+        print("Arco initialized: system ugens created, audio open")
 
 
 def max_chans(chans, ugen):
