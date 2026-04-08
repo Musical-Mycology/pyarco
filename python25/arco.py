@@ -231,10 +231,10 @@ def initialize_o2lite(input_chans=2, output_chans=2):
         o2lite.send_cmd("/arco/free", 0, "i", OUTPUT_ID)
         output_ugen = Sum(output_chans, True, OUTPUT_ID)
 
-        # Open audio with default devices (-1 = system default)
+        # Open audio: use device 0 for both in and out (first available)
         # params: in_id, out_id, in_chans, out_chans, latency_ms, buffer_size
         o2lite.send_cmd("/arco/open", 0, "iiiiii",
-                        -1, -1, input_chans, output_chans, 10, 128)
+                        0, 0, input_chans, output_chans, 10, 128)
 
         # Poll to let audio start
         for _ in range(100):
