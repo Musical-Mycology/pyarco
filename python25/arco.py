@@ -192,7 +192,7 @@ def pan_45(x, gain=1):
 o2lite = None
 
 
-def initialize_o2lite():
+def initialize_o2lite(input_chans=2, output_chans=2):
     global o2lite
     if o2lite is None:
         o2lite = O2lite()
@@ -201,6 +201,23 @@ def initialize_o2lite():
             o2lite.poll()
             time.sleep(0.01)
         print("Connected to ensemble", ENSEMBLE, "O2time", o2lite.time_get())
+
+        # Register action control service and reset Arco server
+        o2lite.send_cmd("/arco/ctrl", 0, "s", "actl")
+        o2lite.send_cmd("/arco/reset", 0, "")
+
+        # Poll briefly to let reset complete
+        for _ in range(50):
+            o2lite.poll()
+            time.sleep(0.01)
+
+        # Create the four system ugens (IDs 0-3)
+        _zero = Zero(ZERO_ID)
+        _zerob = Zerob(ZEROB_ID)
+        _input = Thru(_zero, input_chans, INPUT_ID)
+        _output = Sum(output_chans, True, OUTPUT_ID)
+
+        print("System ugens created (Zero, Zerob, Input, Output)")
 
 
 def max_chans(chans, ugen):
