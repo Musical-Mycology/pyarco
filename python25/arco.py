@@ -196,28 +196,54 @@ def initialize_o2lite(input_chans=2, output_chans=2):
     global o2lite
     if o2lite is None:
         o2lite = O2lite()
+
+        # Register actl service and handlers BEFORE connecting
+        o2lite.set_services("actl")
+
+        _reset_received = [False]
+
+        def actl_reset_handler(address, types, info):
+            status = o2lite.get_int32()
+            if status != 0:
+                print("WARNING: actl_reset status", status)
+            _reset_received[0] = True
+            print("Arco reset complete (status", status, ")")
+
+        def actl_free_handler(address, types, info):
+            _id = o2lite.get_int32()
+            # ID freed on server side — could return to pool here
+
+        o2lite.method_new("/actl/reset", "i", True,
+                          actl_reset_handler, None)
+        o2lite.method_new("/actl/free", "i", True,
+                          actl_free_handler, None)
+
         o2lite.initialize(ENSEMBLE, debug_flags="a")
         while o2lite.time_get() < 0:
             o2lite.poll()
             time.sleep(0.01)
         print("Connected to ensemble", ENSEMBLE, "O2time", o2lite.time_get())
 
-        # Register action control service and reset Arco server
+        # Tell Arco to send callbacks to our actl service, then reset
         o2lite.send_cmd("/arco/ctrl", 0, "s", "actl")
         o2lite.send_cmd("/arco/reset", 0, "")
 
-        # Poll briefly to let reset complete
-        for _ in range(50):
+        # Wait for reset confirmation
+        for _ in range(500):
             o2lite.poll()
+            if _reset_received[0]:
+                break
             time.sleep(0.01)
+        else:
+            print("WARNING: Arco reset confirmation not received")
 
-        # Create the four system ugens (IDs 0-3)
-        _zero = Zero(ZERO_ID)
-        _zerob = Zerob(ZEROB_ID)
-        _input = Thru(_zero, input_chans, INPUT_ID)
-        _output = Sum(output_chans, True, OUTPUT_ID)
-
-        print("System ugens created (Zero, Zerob, Input, Output)")
+        if _reset_received[0]:
+            # Create the four system ugens (IDs 0-3)
+            _zero = Zero(ZERO_ID)
+            _zerob = Zerob(ZEROB_ID)
+            _input = Thru(_zero, input_chans, INPUT_ID)
+            _output = Sum(output_chans, True, OUTPUT_ID)
+            print("System ugens created (Zero, Zerob, Input, Output)")
 
 
 def max_chans(chans, ugen):
