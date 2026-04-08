@@ -200,39 +200,37 @@ def initialize_o2lite(input_chans=2, output_chans=2):
     global o2lite
     if o2lite is None:
         o2lite = O2lite()
-
-        _reset_received = [False]
-
-        def actl_reset_handler(address, types, info):
-            status = o2lite.get_int32()
-            if status != 0:
-                print("WARNING: actl_reset status", status)
-            _reset_received[0] = True
-            print("Arco reset complete (status", status, ")")
-
-        def actl_free_handler(address, types, info):
-            _id = o2lite.get_int32()
-            # ID freed on server side — could return to pool here
-
-        o2lite.method_new("/actl/reset", "i", True,
-                          actl_reset_handler, None)
-        o2lite.method_new("/actl/free", "i", True,
-                          actl_free_handler, None)
-
         o2lite.initialize(ENSEMBLE, debug_flags="a")
         while o2lite.time_get() < 0:
             o2lite.poll()
             time.sleep(0.01)
         print("Connected to ensemble", ENSEMBLE, "O2time", o2lite.time_get())
 
-        # Create the four system ugens (IDs 0-3)
-        # These must exist for play()/mute() to work (they use OUTPUT_ID=3)
+        # Reset Arco — the host creates system ugens at IDs 0-3 as Thru's.
+        # We then replace OUTPUT_ID with a Sum (needed for play()/mute()).
+        o2lite.send_cmd("/arco/reset", 0, "")
+
+        # Wait for reset to complete (host processes it synchronously,
+        # but messages are queued so we need to poll)
+        for _ in range(100):
+            o2lite.poll()
+            time.sleep(0.01)
+
+        # The host already created Zero(0), Zerob(1), Thru(2), Thru(3).
+        # Create Python-side wrappers WITHOUT sending creation messages.
         global zero_ugen, zerob_ugen, input_ugen, output_ugen
-        zero_ugen = Zero(ZERO_ID)
-        zerob_ugen = Zerob(ZEROB_ID)
-        input_ugen = Thru(zero_ugen, input_chans, INPUT_ID)
+        zero_ugen = Ugen("Zero", 1, A_RATE, "", no_msg=True)
+        zero_ugen.id = ZERO_ID
+        zerob_ugen = Ugen("Zerob", 1, B_RATE, "", no_msg=True)
+        zerob_ugen.id = ZEROB_ID
+        input_ugen = Ugen("Thru", input_chans, A_RATE, "", no_msg=True)
+        input_ugen.id = INPUT_ID
+
+        # Replace host's Thru at OUTPUT_ID with a Sum (play/mute need it).
+        # First free the host's Thru, then create our Sum.
+        o2lite.send_cmd("/arco/free", 0, "i", OUTPUT_ID)
         output_ugen = Sum(output_chans, True, OUTPUT_ID)
-        print("System ugens created (Zero, Zerob, Input, Output)")
+        print("System ugens initialized, output Sum created at ID", OUTPUT_ID)
 
 
 def max_chans(chans, ugen):
