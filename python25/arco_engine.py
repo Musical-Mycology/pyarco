@@ -248,18 +248,17 @@ class Action_list:
         self.ugen_actions = ugen_actions
 
 
-# --------------- Thread-local engine accessor ---------------
+# --------------- Active engine accessor ---------------
 
-_active_engine = threading.local()
+_active_engine = None
 
 
 def get_engine():
-    """Return the active ArcoEngine for the current thread."""
-    engine = getattr(_active_engine, 'instance', None)
-    if engine is None:
+    """Return the active ArcoEngine."""
+    if _active_engine is None:
         raise RuntimeError(
             "No active ArcoEngine -- call engine.connect() first")
-    return engine
+    return _active_engine
 
 
 # --------------- ArcoEngine ---------------
@@ -312,7 +311,8 @@ class ArcoEngine:
             time.sleep(0.01)
 
         # Set as active engine BEFORE creating system ugens
-        _active_engine.instance = self
+        global _active_engine
+        _active_engine = self
 
         # System ugen shadows (no_msg=True -- host already created them).
         # Use id_num to avoid wasting pool slots.
@@ -349,8 +349,9 @@ class ArcoEngine:
         self.input = None
         self.output = None
         self.o2lite = None
-        if getattr(_active_engine, 'instance', None) is self:
-            _active_engine.instance = None
+        global _active_engine
+        if _active_engine is self:
+            _active_engine = None
 
     def __enter__(self):
         self.connect()
