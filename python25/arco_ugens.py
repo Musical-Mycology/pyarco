@@ -85,7 +85,7 @@ class Ugen:
         print(f"Ugen {self.id} created and ID allocated")
 
     def __del__(self):
-        if self.engine is not None:
+        if getattr(self, 'engine', None) is not None:
             self.engine.send_cmd("/arco/free", 0, "i", self.id)
             self.engine.id_pool.free_slot(self.id)
             self.engine.unregister(self.id)
