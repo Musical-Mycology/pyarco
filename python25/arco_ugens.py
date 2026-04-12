@@ -38,12 +38,10 @@ class Ugen:
     ):
         self.engine = engine or get_engine()
 
-        inputs_ = list(inputs_)  # replace with **kwargs?
-        # If subclass pre-set self.id (e.g. system ugens with fixed IDs),
-        # keep it; otherwise allocate from pool
+        inputs_ = list(inputs_)
         if id_num is not None:
             self.id = id_num
-        elif not hasattr(self, 'id') or self.id is None:
+        else:
             self.id = self.engine.id_pool.request_slot()
         self.engine.register(self)
         self.classname = classname_
@@ -530,10 +528,8 @@ class Recplay(Ugen):
 class Sum(Ugen):
 
     def __init__(self, chans, wrap=True, id_num=None):
-        if id_num is not None:
-            self.id = id_num
         super().__init__("Sum", chans, A_RATE, "i", None, None, 'wrap',
-                         1 if wrap else 0)
+                         1 if wrap else 0, id_num=id_num)
 
     def ins(self, *ugens):
         for ugen in ugens:
@@ -558,10 +554,8 @@ class Sum(Ugen):
 class Sumb(Ugen):
 
     def __init__(self, chans, wrap=True, id_num=None):
-        if id_num is not None:
-            self.id = id_num
         super().__init__("Sumb", chans, B_RATE, "i", None, None, 'wrap',
-                         1 if wrap else 0)
+                         1 if wrap else 0, id_num=id_num)
 
     def ins(self, *ugens):
         for ugen in ugens:
@@ -654,10 +648,8 @@ class Trig(Ugen):
 class Thru(Ugen):
 
     def __init__(self, input, chans=1, id_num=None):
-        if id_num is not None:
-            self.id = id_num
         super().__init__("Thru", chans, A_RATE, "U", None, None, 'input',
-                         input)
+                         input, id_num=id_num)
 
     def set_alternate(self, alt):
         self.engine.send_cmd("/arco/thru/alt", 0, "ii", self.id, alt.id)
@@ -1568,18 +1560,15 @@ class Onset(Ugen):
 class Zero(Ugen):
 
     def __init__(self, id_num=None):
-        # If id_num is provided use it, otherwise let Ugen.uid_pool allocate one
-        if id_num is not None:
-            self.id = id_num
-        super().__init__("Zero", 1, A_RATE, "", omit_chans=True)
+        super().__init__("Zero", 1, A_RATE, "", omit_chans=True,
+                         id_num=id_num)
 
 
 class Zerob(Ugen):
 
     def __init__(self, id_num=None):
-        if id_num is not None:
-            self.id = id_num
-        super().__init__("Zerob", 1, B_RATE, "", omit_chans=True)
+        super().__init__("Zerob", 1, B_RATE, "", omit_chans=True,
+                         id_num=id_num)
 
 
 # Import auto-generated ugen wrappers (overrides hand-written versions if present)
