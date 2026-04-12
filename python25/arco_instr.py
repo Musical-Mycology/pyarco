@@ -26,8 +26,6 @@ from arco import (
     Multx,
     Addb,
     Add,
-    o2lite,
-    initialize_o2lite,
     max_chans,
     A_RATE,
     B_RATE,
