@@ -88,8 +88,7 @@ from arco import (
     pan_eqlpow,
     pan_45,
     max_chans,
-    initialize_o2lite,
-    o2lite,
+    ArcoEngine,
     OUTPUT_ID,
 )
 
@@ -101,6 +100,7 @@ class DemoState:
 
     def __init__(self):
         self.connected = False
+        self.engine = None
         self.active_ugens = {}  # tag -> {'ugen': Ugen, 'playing': bool, ...}
         self._counter = 0
 
@@ -126,7 +126,8 @@ class DemoState:
     def connect(self):
         if not self.connected:
             try:
-                initialize_o2lite()
+                self.engine = ArcoEngine()
+                self.engine.connect()
                 self.connected = True
             except Exception as e:
                 self._connect_error = str(e)

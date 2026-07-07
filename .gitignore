@@ -9,3 +9,4 @@ __pycache__/
 
 # Archives
 *.zip
+.venv/
