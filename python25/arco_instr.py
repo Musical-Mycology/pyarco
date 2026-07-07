@@ -4,6 +4,7 @@ import random
 from arco import (
     Ugen,
     Const,
+    get_engine,
     Smoothb,
     Const_like,
     Sum,
@@ -607,15 +608,25 @@ def multi_reverb(input, rt60, wet=1, hz=10000, chans=None):
 _sawtooth_waveforms = None
 
 
-class Sawtooth_waveforms:
-    """Singleton manager for anti-aliased sawtooth wavetables."""
+def get_sawtooth_waveforms():
+    """Return the sawtooth wavetable singleton for the active engine,
+    rebuilding it if the engine changed since it was created."""
+    global _sawtooth_waveforms
+    engine = get_engine()
+    if (_sawtooth_waveforms is None
+            or _sawtooth_waveforms.engine is not engine):
+        _sawtooth_waveforms = Sawtooth_waveforms(engine)
+    return _sawtooth_waveforms
 
-    def __init__(self):
-        global _sawtooth_waveforms
+
+class Sawtooth_waveforms:
+    """Per-engine manager for anti-aliased sawtooth wavetables."""
+
+    def __init__(self, engine):
+        self.engine = engine
         self.created = [None] * 36
         self.tables = Tableosc(1, 1)
         self.next_index = 0
-        _sawtooth_waveforms = self
 
     def get_index(self, step, antialias=True):
         if antialias:
@@ -644,11 +655,8 @@ class Supersaw_instr(Instrument):
     """A supersaw instrument with multiple detuned sawtooth oscillators."""
 
     def __init__(self, synth, note_spec, pitch, vel):
-        global _sawtooth_waveforms
         instr_begin()
-
-        if _sawtooth_waveforms is None:
-            Sawtooth_waveforms()
+        self.saw = get_sawtooth_waveforms()
 
         chans = note_spec.get('chans', 1)
         self.n = max(1, round(note_spec.get('n', 8)))
@@ -667,7 +675,7 @@ class Supersaw_instr(Instrument):
                      1)
         param_method('rolloff', self.rolloff, 'set_rolloff', 'clip', 0, 1)
 
-        table_index = _sawtooth_waveforms.get_index(pitch, self.antialias != 0)
+        table_index = self.saw.get_index(pitch, self.antialias != 0)
 
         if chans == 1:
             self.mixer = Sum(1)
@@ -729,7 +737,7 @@ class Supersaw_instr(Instrument):
         amp = self._calc_tableosc_amp(i)
         phase = rndphase * random.uniform(0, 360)
         comp = Tableosc(hz, Const(amp), phase=phase)
-        comp.borrow(_sawtooth_waveforms.tables)
+        comp.borrow(self.saw.tables)
         comp.select(table_index)
 
         if chans == 1:
@@ -792,8 +800,7 @@ class Supersaw_instr(Instrument):
             self.mixer.set_width(width)
 
     def _calc_tableosc_index(self):
-        table_index = _sawtooth_waveforms.get_index(self.pitch, self.antialias
-                                                    != 0)
+        table_index = self.saw.get_index(self.pitch, self.antialias != 0)
         for comp in self.components:
             comp.select(table_index)
 
