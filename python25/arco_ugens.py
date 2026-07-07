@@ -56,6 +56,7 @@ class Ugen:
         self.inputs = {}
         self.action_id = None
         self._server_freed = False  # set when the server has already freed this id
+        self._fade_out = None  # in-flight fade-out Fader, cleared by _drop_after
 
         if no_msg:
             return
@@ -106,21 +107,29 @@ class Ugen:
 
     def mute(self, status=None):
         # status is accepted (passed by atend actions) but ignored here
+        # If a fade-out is in flight, the Fader is what's in the output.
+        target = self._fade_out or self
         output = self.engine.output
         if output is not None:
-            output.members.pop(self.id, None)
-        self.engine.send_cmd("/arco/sum/rem", 0, "ii", OUTPUT_ID, self.id)
+            output.members.pop(target.id, None)
+        self.engine.send_cmd("/arco/sum/rem", 0, "ii", OUTPUT_ID, target.id)
 
     def fade(self, dur, mode=FADE_SMOOTH):
         """Fade output to zero over dur seconds, then disconnect."""
-        fader = self.engine.fade_in_lookup.get(self.id)
-        if fader:
+        fader = self.engine.fade_in_lookup.pop(self.id, None)
+        if fader is not None:
             # fade_in is in progress; convert to fade out
-            del self.engine.fade_in_lookup[self.id]
             fader.set_dur(dur)
             fader.set_goal(0)
             fader.set_mode(mode)
+            self._fade_out = fader
             self._drop_after(fader, dur)
+            return fader
+        if self._fade_out is not None:
+            # a fade-out is already in flight; adjust it, don't re-swap
+            fader = self._fade_out
+            fader.set_dur(dur)
+            fader.set_mode(mode)
             return fader
         faded = create_fader(self, 1, dur, 0)
         faded.term()
@@ -132,6 +141,7 @@ class Ugen:
         self.engine.send_cmd("/arco/sum/swap", 0, "iii", OUTPUT_ID,
                              self.id, faded.id)
         faded.set_mode(mode)
+        self._fade_out = faded
         self._drop_after(faded, dur)
         return faded
 
@@ -142,6 +152,8 @@ class Ugen:
 
         def _cleanup():
             fader._server_freed = True
+            if self._fade_out is fader:
+                self._fade_out = None
             output = engine.output
             if output is not None:
                 output.members.pop(fader.id, None)

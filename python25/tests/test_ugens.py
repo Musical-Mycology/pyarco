@@ -100,3 +100,31 @@ def test_fade_in_completion_swaps_source_back(engine, monkeypatch):
     assert s.id not in engine.fade_in_lookup
     assert engine.output.members[s.id] is s
     assert fader.id not in engine.output.members
+
+
+def test_double_fade_reuses_fader_and_sends_one_swap(engine, monkeypatch):
+    monkeypatch.setattr(arco_ugens, "_FADE_CLEANUP_MARGIN", 0.05)
+    engine.output = Sum(2, True, id_num=OUTPUT_ID)
+    s = Sine(440, 0.1)
+    s.play()
+    f1 = s.fade(0.05)
+    f2 = s.fade(0.05)
+    assert f2 is f1
+    swaps = [m for m in engine.o2lite.messages if m[0] == "/arco/sum/swap"]
+    assert len(swaps) == 1
+    assert list(engine.output.members) == [f1.id]
+    time.sleep(0.3)
+    assert s._fade_out is None
+    assert f1.id not in engine.output.members
+
+
+def test_mute_during_fade_removes_live_fader(engine, monkeypatch):
+    monkeypatch.setattr(arco_ugens, "_FADE_CLEANUP_MARGIN", 0.05)
+    engine.output = Sum(2, True, id_num=OUTPUT_ID)
+    s = Sine(440, 0.1)
+    s.play()
+    fader = s.fade(0.05)
+    s.mute()
+    assert fader.id not in engine.output.members
+    rems = [m for m in engine.o2lite.messages if m[0] == "/arco/sum/rem"]
+    assert rems[-1][2] == (OUTPUT_ID, fader.id)
