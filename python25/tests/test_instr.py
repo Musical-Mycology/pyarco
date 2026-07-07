@@ -77,3 +77,25 @@ def test_missing_instr_begin_raises_without_leaking(engine):
     with pytest.raises(RuntimeError):
         Instrument("NoBegin", out)
     assert threading.get_ident() not in _instr_stacks
+
+
+def test_synth_is_finished_releases_mix_input(engine):
+    from arco_instr import Synth
+
+    class OneNoteSynth(Synth):
+        def instr_create(self, note_spec, pitch, vel):
+            instr_begin()
+            out = Sine(440, 0.5)
+            return Instrument("TestNote", out, self)
+
+    syn = OneNoteSynth({}, {}, 1, [])
+    instr = syn.noteon(60, 100)
+    assert instr.mixer_id in syn.output.inputs
+    syn.noteoff(60)
+    syn.is_finished(instr)
+    assert instr.mixer_id not in syn.output.inputs
+    assert instr in syn.free_notes
+    # reuse works: same mixer_id is re-inserted
+    instr2 = syn.noteon(60, 100)
+    assert instr2 is instr
+    assert instr.mixer_id in syn.output.inputs

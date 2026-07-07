@@ -422,6 +422,9 @@ class Synth(Instrument):
             self.finishing_notes.remove(note)
         elif note.user_id in self.notes:
             del self.notes[note.user_id]
+        # Release the Mix input: without this the Mix pins the note's
+        # entire ugen subgraph even after the note is recycled.
+        self.output.rem(note.mixer_id)
         self.free_notes.append(note)
 
     def update_note(self, id, param_name, value):

@@ -222,8 +222,11 @@ Uses NiceGUI (`nicegui` package). Features:
   stays allocated until the Python object dies. Full fix needs
   client-side `ACTION_FREE` handling.
 - `/actl/act` is never registered as an o2lite method handler in
-  `connect()`, so server-initiated actions (`atend`, `Instrument.finish`
-  / `Synth.is_finished` note recycling) do not fire yet.
+  `connect()`, and nothing calls `atend()` yet, so server-initiated
+  actions (`Instrument.finish` / `Synth.is_finished` note recycling) do
+  not fire in practice: `finishing_notes` grows until the action wiring
+  lands. `Synth.is_finished` itself is correct and tested (it releases
+  the note's `Mix` input and recycles into `free_notes`).
 - `play()` during an in-flight `fade_in()` inserts the ugen at full
   volume while the fader is still ramping — audible overlap until the
   fade-in timer completes. `play()` could check `fade_in_lookup`.
