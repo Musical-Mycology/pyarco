@@ -47,9 +47,11 @@ class Ugen:
         inputs_ = list(inputs_)
         if id_num is not None:
             self.id = id_num
+            self.owns_id = False  # caller/engine manages this id's lifetime
         else:
             self.id = self.engine.id_pool.request_slot()
-        self.engine.register(self)
+            self.owns_id = True
+            self.engine.register(self)
         self.classname = classname_
         self.chans = chans_
         self.rate = rate_
@@ -93,11 +95,13 @@ class Ugen:
         print(f"Ugen {self.id} created and ID allocated")
 
     def __del__(self):
-        if getattr(self, 'engine', None) is not None:
-            if not getattr(self, '_server_freed', False):
-                self.engine.send_cmd("/arco/free", 0, "i", self.id)
-            self.engine.id_pool.free_slot(self.id)
-            self.engine.unregister(self.id)
+        engine = getattr(self, 'engine', None)
+        if engine is None or not getattr(self, 'owns_id', False):
+            return
+        if not getattr(self, '_server_freed', False):
+            engine.send_cmd("/arco/free", 0, "i", self.id)
+        engine.id_pool.free_slot(self.id)
+        engine.unregister(self.id)
 
     def play(self):
         output = self.engine.output

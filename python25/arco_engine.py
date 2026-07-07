@@ -332,13 +332,14 @@ class ArcoEngine:
         """Free all ugens, disconnect, and clear active engine."""
         if self.o2lite is None:
             return
-        # Free non-system ugens in reverse creation order
-        for ugen_id in sorted(self._ugens.keys(), reverse=True):
-            ugen = self._ugens[ugen_id]
-            if ugen_id >= 100:  # skip system ugens (0-3)
-                self.send_cmd("/arco/free", 0, "i", ugen_id)
+        # Free pool-allocated ugens in reverse id order
+        for ugen_id, ugen in sorted(list(self._ugens.items()), reverse=True):
+            self.send_cmd("/arco/free", 0, "i", ugen_id)
             ugen.engine = None  # prevent double-free in __del__
         self._ugens.clear()
+        for ugen in (self.zero, self.zerob, self.input, self.output):
+            if ugen is not None:
+                ugen.engine = None
         self.id_pool = UgenID()
         self.action_dict.clear()
         self.next_action_id = 1

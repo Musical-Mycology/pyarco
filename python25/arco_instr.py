@@ -166,14 +166,15 @@ class Instrument(Ugen):
             self.mixer_id = synth.get_mixer_id()
 
         self.output = output_ugen
-        # Inherit the output ugen's id so that wiring this Instrument
-        # into the graph is the same as wiring its output.
+        # Borrow the output ugen's id so that wiring this Instrument
+        # into the graph is the same as wiring its output. The output
+        # ugen owns the id; this wrapper never frees it.
         super().__init__(name,
                          output_ugen.chans,
                          output_ugen.rate,
                          "",
-                         no_msg=True)
-        self.id = output_ugen.id
+                         no_msg=True,
+                         id_num=output_ugen.id)
 
         if len(_instr_stack) == 0:
             raise RuntimeError(
