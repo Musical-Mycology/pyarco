@@ -37,6 +37,12 @@ from arco import (
     MATH_OP_MUL,
     MATH_OP_ADD,
     MATH_OP_SUB,
+    ACTION_REM,
+    ACTION_TERM,
+    ACTION_END,
+    ACTION_END_OR_TERM,
+    MUTE,
+    FINISH,
     step_to_hz,
     hz_to_step,
     steps_to_hzdiff,
@@ -46,15 +52,9 @@ from arco import (
 
 # ======================== Action / callback constants ========================
 
-ACTION_REM = 1
-ACTION_TERM = 2
-ACTION_END = 4
-ACTION_END_OR_TERM = ACTION_TERM | ACTION_END
 SIGNAL = 'signal'
 GAIN = 'gain'
 BOTH = 'both'
-MUTE = 'mute'
-FINISH = 'finish'
 
 # ======================== Instrument parameter framework =====================
 
