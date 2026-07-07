@@ -573,6 +573,7 @@ class Recplay(Ugen):
         return self
 
     def borrow(self, u):
+        self._lender = u  # pin: server borrows u's buffer; keep it alive
         self.engine.send_cmd("/arco/recplay/borrow", 0, "ii", self.id, u.id)
         return self
 
@@ -718,6 +719,7 @@ class Thru(Ugen):
                          input, id_num=id_num)
 
     def set_alternate(self, alt):
+        self._alternate = alt  # pin: server's alt pointer must not outlive our ref
         self.engine.send_cmd("/arco/thru/alt", 0, "ii", self.id, alt.id)
         return self
 
@@ -1488,6 +1490,7 @@ class Wavetables(Ugen):
         return self.create_table(index, None, samps, "createttd")
 
     def borrow(self, lender):
+        self._lender = lender  # pin: server borrows lender's tables; keep it alive
         self.engine.send_cmd(f"{self.address_prefix}borrow", 0, "ii", self.id,
                         lender.id)
         return self

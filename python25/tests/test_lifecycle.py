@@ -96,3 +96,37 @@ def test_instrument_gc_after_close_is_noop(engine):
     del instr
     gc.collect()
     assert len(transport.messages) == n_msgs  # borrowed id: GC sends nothing
+
+
+def test_set_alternate_pins_alternate(engine):
+    from arco_ugens import Thru
+    thru = Thru(Sine(440, 0.1))
+    alt = Sine(220, 0.1)
+    aid = alt.id
+    thru.set_alternate(alt)
+    del alt
+    gc.collect()
+    assert ("/arco/free", "i", (aid,)) not in engine.o2lite.messages
+
+
+def test_recplay_borrow_pins_lender(engine):
+    from arco_ugens import Recplay
+    src = Sine(440, 0.1)
+    rp1 = Recplay(src)
+    rp2 = Recplay(src)
+    lid = rp1.id
+    rp2.borrow(rp1)
+    del rp1
+    gc.collect()
+    assert ("/arco/free", "i", (lid,)) not in engine.o2lite.messages
+
+
+def test_tableosc_borrow_pins_lender(engine):
+    from arco_ugens import Tableosc
+    lender = Tableosc(440, 0.5)
+    borrower = Tableosc(220, 0.5)
+    lid = lender.id
+    borrower.borrow(lender)
+    del lender
+    gc.collect()
+    assert ("/arco/free", "i", (lid,)) not in engine.o2lite.messages
