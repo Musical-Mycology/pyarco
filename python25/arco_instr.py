@@ -297,8 +297,6 @@ class Score:
 
 # ======================== Synth (polyphonic manager) =========================
 
-_mix_name_counter = 0
-
 
 def mix_name(i):
     """Generate a symbol-like string for mixer input naming."""

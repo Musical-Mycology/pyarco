@@ -2,7 +2,6 @@ import os
 import sys
 import time
 import math
-import threading
 import weakref
 
 sys.path.append(

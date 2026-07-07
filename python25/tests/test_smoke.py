@@ -9,3 +9,4 @@ def test_sine_creation_sends_new_message(engine):
     assert addrs.count("/arco/const/newn") == 2  # freq and amp auto-wrapped
     assert s.id >= engine.id_pool.start_id
     assert s.inputs["freq"].id != s.inputs["amp"].id
+    assert s._addr_prefix == "/arco/sine"

@@ -27,6 +27,10 @@ import threading
 # a terminated Fader (server frees it at termination).
 _FADE_CLEANUP_MARGIN = 0.5
 
+import logging
+
+log = logging.getLogger("pyarco")
+
 
 class Ugen:
 
@@ -55,6 +59,7 @@ class Ugen:
         self.classname = classname_
         self.chans = chans_
         self.rate = rate_
+        self._addr_prefix = "/arco/" + classname_.lower()
         self.inputs = {}
         self.action_id = None
         self._server_freed = False  # set when the server has already freed this id
@@ -70,7 +75,7 @@ class Ugen:
                 inputs_[i] = Const(inputs_[i], None)
 
         # construct the message
-        address = f"/arco/{self.classname.lower()}/new"
+        address = f"{self._addr_prefix}/new"
         params = []
         type_str = "i"  # only the id at first
 
@@ -92,7 +97,7 @@ class Ugen:
                 type_str += types_[i // 2]
 
         self.engine.send_cmd(address, 0, type_str, *params)
-        print(f"Ugen {self.id} created and ID allocated")
+        log.debug("Ugen %d (%s) created", self.id, self.classname)
 
     def __del__(self):
         engine = getattr(self, 'engine', None)
@@ -209,7 +214,7 @@ class Ugen:
                       self.classname + "'")
             return
 
-        addr_prefix = "/arco/" + self.classname.lower()
+        addr_prefix = self._addr_prefix
 
         if isinstance(value, list):
             # Array of numbers: update multiple channels of a Const input.
@@ -682,7 +687,7 @@ class Vu(Ugen):
 
     def set(self, input_name, value):
         self.inputs['input'] = value
-        print(f"Vu set {self.id} {value.id}")
+        log.debug("Vu set %d %d", self.id, value.id)
         self.engine.send_cmd("/arco/vu/repl_input", 0, "ii", self.id, value.id)
         return self
 
@@ -1337,7 +1342,7 @@ class Chorddetect(Ugen):
 
     def set(self, input_name, value):
         self.inputs['input'] = value  # the only thing you can set is 'input'
-        print(f"Chorddetect set {self.id} {value.id}")
+        log.debug("Chorddetect set %d %d", self.id, value.id)
         self.engine.send_cmd("/arco/chorddetect/repl_input", 0, "ii", self.id,
                         value.id)
         return self
@@ -1356,7 +1361,7 @@ class SpectralCentroid(Ugen):
 
     def set(self, input_name, value):
         self.inputs['input'] = value  # the only thing you can set is 'input'
-        print(f"SpectralCentroid set {self.id} {value.id}")
+        log.debug("SpectralCentroid set %d %d", self.id, value.id)
         self.engine.send_cmd("/arco/spectralcentroid/repl_input", 0, "ii", self.id,
                         value.id)
         return self
@@ -1375,7 +1380,7 @@ class SpectralRolloff(Ugen):
 
     def set(self, input_name, value):
         self.inputs['input'] = value  # the only thing you can set is 'input'
-        print(f"SpectralRolloff set {self.id} {value.id}")
+        log.debug("SpectralRolloff set %d %d", self.id, value.id)
         self.engine.send_cmd("/arco/spectralrolloff/repl_input", 0, "ii", self.id,
                         value.id)
         return self
