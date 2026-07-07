@@ -67,6 +67,10 @@ BOTH = 'both'
 # from cross-wiring parameters. (The active engine is deliberately a
 # shared module global instead -- construction state is the exception
 # because it never crosses a callback boundary.)
+# CAUTION: an exception between instr_begin() and Instrument.__init__()
+# orphans a context on this thread's stack; if the OS later reuses the
+# thread id, the orphan can corrupt a subsequent unrelated construction.
+# Callback wrappers should catch-and-clear on that boundary.
 _instr_stacks = defaultdict(list)
 
 
@@ -187,7 +191,7 @@ class Instrument(Ugen):
                          no_msg=True,
                          id_num=output_ugen.id)
 
-        stack = _instr_stack()
+        stack = _instr_stacks.get(threading.get_ident())
         if not stack:
             raise RuntimeError(
                 "instr stack is empty. Did you forget instr_begin()?")

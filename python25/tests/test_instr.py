@@ -68,3 +68,12 @@ def test_instr_construction_interleaved_threads(engine):
     assert 'freq' not in instr_main.parameter_bindings
     assert 'freq' in result['instr'].parameter_bindings
     assert 'gain' not in result['instr'].parameter_bindings
+
+
+def test_missing_instr_begin_raises_without_leaking(engine):
+    import pytest
+    from arco_instr import _instr_stacks
+    out = Sine(440, 0.5)
+    with pytest.raises(RuntimeError):
+        Instrument("NoBegin", out)
+    assert threading.get_ident() not in _instr_stacks
