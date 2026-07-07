@@ -36,3 +36,35 @@ def test_instr_construction_is_thread_isolated(engine):
     out2 = Sine(220, 0.5)
     instr2 = Instrument("Main", out2)
     assert 'gain' in instr2.parameter_bindings
+
+
+def test_instr_construction_interleaved_threads(engine):
+    """Two constructions genuinely interleaved mid-flight: the worker
+    pushes its context, then the MAIN thread finishes its own
+    construction while the worker is paused. A shared LIFO stack would
+    hand main the worker's context."""
+    worker_pushed = threading.Event()
+    main_done = threading.Event()
+    result = {}
+
+    def build_in_worker():
+        instr_begin()
+        param('freq', 440)
+        worker_pushed.set()
+        main_done.wait(5)
+        out = Sine(440, 0.5)
+        result['instr'] = Instrument("Worker", out)
+
+    instr_begin()
+    param('gain', 0.5)
+    t = threading.Thread(target=build_in_worker)
+    t.start()
+    worker_pushed.wait(5)
+    out2 = Sine(220, 0.5)
+    instr_main = Instrument("Main", out2)
+    main_done.set()
+    t.join()
+    assert 'gain' in instr_main.parameter_bindings
+    assert 'freq' not in instr_main.parameter_bindings
+    assert 'freq' in result['instr'].parameter_bindings
+    assert 'gain' not in result['instr'].parameter_bindings
