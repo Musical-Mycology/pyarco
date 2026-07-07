@@ -25,13 +25,17 @@ favor of the engine's context manager API.
 
 ## Design
 
-### Approach: Engine as Context with Thread-Local Fallback
+### Approach: Engine as Context with Module-Level Global
 
 `ArcoEngine` works as a context manager that sets itself as the "active engine"
-via a thread-local. Ugens grab the active engine automatically via
+via a module-level global. Ugens grab the active engine automatically via
 `get_engine()`, but can accept an explicit `engine=` kwarg to override. This
 gives a clean API for the common single-engine case while supporting
 multi-engine scenarios if ever needed.
+
+> **Note:** An earlier draft used `threading.local()` but this was changed to a
+> plain module global because NiceGUI callbacks run in different threads, causing
+> them to lose the thread-local engine reference.
 
 ### ArcoEngine Class
 
@@ -80,16 +84,13 @@ class ArcoEngine:
 ### Active Engine Access
 
 ```python
-import threading
-
-_active_engine = threading.local()
+_active_engine = None
 
 def get_engine() -> ArcoEngine:
-    engine = getattr(_active_engine, 'instance', None)
-    if engine is None:
+    if _active_engine is None:
         raise RuntimeError(
-            "No active ArcoEngine -- use 'with ArcoEngine() as engine:'")
-    return engine
+            "No active ArcoEngine -- call engine.connect() first")
+    return _active_engine
 ```
 
 ### Ugen Base Class Changes
@@ -135,7 +136,9 @@ def close(self):
     self._ugens.clear()
     self.id_pool = UgenID()
     self.o2lite = None
-    _active_engine.instance = None
+    global _active_engine
+    if _active_engine is self:
+        _active_engine = None
 ```
 
 Reverse order ensures dependents are freed before their dependencies.
@@ -146,7 +149,7 @@ Setting `ugen.engine = None` prevents `__del__` from sending a redundant
 
 **`arco_engine.py`** — Engine, connection, infrastructure:
 - `ArcoEngine` class
-- `get_engine()` thread-local accessor
+- `get_engine()` module-level accessor
 - `UgenID` pool
 - Action system (`register_action`, `actl_act_handler`, `Action_list`,
   `Ugen_action`)
