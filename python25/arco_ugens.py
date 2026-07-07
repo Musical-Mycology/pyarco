@@ -334,9 +334,11 @@ class Smoothb(Const_like):
 
         super().__init__("Smoothb", self.chans, B_RATE, "", True, None)
 
-        self.send_floats([cutoff] +
-                         (x if isinstance(x, list) else [x] * self.chans),
-                         "/arco/smoothb/newn")
+        values = x if isinstance(x, list) else [x] * self.chans
+        floats = [cutoff] + [values[i] if i < len(values) else 0
+                             for i in range(self.chans)]
+        self.engine.send_cmd("/arco/smoothb/newn", 0,
+                             "i" + "f" * len(floats), self.id, *floats)
 
     def set(self, x):
         self.send_floats(x, "/arco/smoothb/setn")
