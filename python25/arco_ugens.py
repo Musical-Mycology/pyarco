@@ -338,8 +338,6 @@ class Smoothb(Const_like):
                          (x if isinstance(x, list) else [x] * self.chans),
                          "/arco/smoothb/newn")
 
-        return self
-
     def set(self, x):
         self.send_floats(x, "/arco/smoothb/setn")
         return self
