@@ -8,8 +8,6 @@ sys.path.append(
     os.path.abspath(
         os.path.join(os.path.dirname(__file__), "../../o2/o2litepy/src")))
 
-from o2lite import O2lite
-
 ZERO_ID = 0  # a single-channel audio source of zero (silence)
 ZEROB_ID = 1  # a single-channel block-rate source of zero
 INPUT_ID = 2  # audio input
@@ -289,6 +287,7 @@ class ArcoEngine:
         if self.o2lite is not None:
             return  # already connected
         from arco_ugens import Ugen, Sum  # deferred to break circular import
+        from o2lite import O2lite  # deferred so the library imports without o2litepy
 
         self.o2lite = O2lite()
         self.o2lite.initialize(self.ensemble, debug_flags="a")
