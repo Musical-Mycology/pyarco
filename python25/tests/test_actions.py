@@ -43,3 +43,26 @@ def test_action_free_removes_entry(engine):
     aid = s.action_id
     engine.actl_act_handler(0, "/actl/act", "iii", aid, ACTION_FREE, 0)
     assert aid not in engine.action_dict
+
+
+def test_handler_isolates_callback_exceptions(engine):
+    calls = []
+
+    class Boom:
+        def mute(self, status):
+            raise RuntimeError("callback failure")
+
+    class Target:
+        def mute(self, status):
+            calls.append(status)
+
+    s = Sine(440, 0.5)
+    boom, t = Boom(), Target()
+    engine.register_action(s, ACTION_END_OR_TERM, boom, 'mute')
+    engine.register_action(s, ACTION_END_OR_TERM, t, 'mute')
+    aid = s.action_id
+    # must not raise, must still deliver to the healthy target
+    engine.actl_act_handler(0, "/actl/act", "iii", aid, ACTION_END, 0)
+    assert calls == [ACTION_END]
+    # pruning reassignment still ran (both targets alive -> both retained)
+    assert len(engine.action_dict[aid].ugen_actions) == 2

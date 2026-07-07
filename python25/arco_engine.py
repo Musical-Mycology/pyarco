@@ -422,5 +422,9 @@ class ArcoEngine:
                 continue  # target was garbage-collected; drop the action
             live.append(ua)
             if status & al.action_mask and hasattr(target, ua.method):
-                getattr(target, ua.method)(status)
+                try:
+                    getattr(target, ua.method)(status)
+                except Exception as e:
+                    print("ERROR: actl_act_handler -", ua.method,
+                          "callback raised:", repr(e))
         al.ugen_actions = live
