@@ -32,34 +32,79 @@ by plain integers (IDs chosen by the client); no pointers cross the interface.
 
 ## Existing Codebase (`python25/`)
 
-### `arco.py` — Core library (~1860 lines)
+The former `arco.py` monolith is now split in two. `arco_engine.py` owns the
+connection and bookkeeping; `arco_ugens.py` holds the `Ugen` base class and
+all wrapper classes; `arco.py` is now a thin re-export shim (`from
+arco_engine import *; from arco_ugens import *`) kept so existing `import
+arco` call sites keep working. `arco_instr.py` and `init.py` are unchanged
+in role. `python25/tests/` is a new offline pytest suite (35 tests)
+exercising lifecycle, constants, and action-dispatch behavior without a
+running Arco server, using a `FakeO2Lite` transport.
 
-The foundation. Contains:
+### `arco_engine.py` — Engine, connection, pool, actions (~430 lines)
 
-**O2 connection** — uses `o2litepy` (pure-Python O2lite implementation). On
-`import`, the module exposes a global `o2lite` instance. `initialize_o2lite()`
-connects to the Arco ensemble, blocking until O2 time becomes available.
+**`ArcoEngine`** — owns the O2lite connection, the `UgenID` pool, and the
+registry of live ugens. `connect()` performs the O2 handshake (deferring the
+`o2lite` import so the module imports without `o2litepy` installed), resets
+the Arco server, sets itself as the active engine, and creates the system
+ugens (`Zero`, `Zerob`, `Thru` for input, `Sum` for output) by shadowing
+IDs 0-3 with `id_num=`. `close()` frees all pool-allocated ugens in reverse
+ID order and clears the active-engine global if it was this engine.
+`ArcoEngine` is also a context manager (`with ArcoEngine() as engine:` calls
+`connect()`/`close()` automatically). `get_engine()` returns the active
+engine or raises if none is connected.
 
 **`UgenID` pool** — linked-list free-slot allocator. Default: 1000 slots,
 user IDs start at 100. `request_slot()` / `free_slot()` for alloc/dealloc.
+Each `ArcoEngine` owns its own pool instance.
+
+**`ArcoEngine._ugens`** — a `weakref.WeakValueDictionary` mapping id to
+`Ugen`. This is the crux of the lifecycle model: a ugen is registered here
+only if it owns a pool-allocated id, and the entry disappears automatically
+once nothing in Python still references that ugen. See "Ugen lifecycle
+model" below.
+
+**Action system** — `register_action()`, `actl_act_handler()`, `Action_list`,
+`Ugen_action`. Translates Arco's `/actl/act` callbacks into Python method
+calls on target objects. `Ugen_action.target` is a `weakref.ref`, so
+registering an action never keeps its target alive; `actl_act_handler`
+prunes dead targets on delivery and isolates each callback in a
+try/except so one broken handler doesn't stop the rest from firing.
+
+**Constants & utilities** (unchanged from prior `arco.py`): rate symbols,
+audio params, system IDs, math/unary op enums, fade/blend/downsample mode
+enums, step/Hz/dB/velocity conversion functions, panning functions.
+
+### `arco_ugens.py` — Ugen base class + wrappers (~1670 lines)
 
 **`Ugen` base class** — all ugen wrappers inherit from this. Key behavior:
 
-- `__init__` auto-allocates an ID, converts numeric inputs to `Const` ugens
-  (when the type string says `"U"`), builds and sends the `/arco/<class>/new`
-  O2 message. Accepts a `types_` string where `"U"` = ugen input, `"i"/"f"/"s"`
-  etc. = literal values. Inputs are passed as alternating `(name, value)` pairs.
-- `__del__` sends `/arco/free` and returns the ID to the pool.
-- `play()` / `mute()` insert/remove from the output Sum.
-- `fade(dur)` / `fade_in(dur)` create a `Fader` wrapper for smooth transitions.
+- `__init__` takes `id_num=` (borrow an existing id, e.g. system ugens and
+  `Instrument`) or, if omitted, pool-allocates an id and registers itself
+  in `engine._ugens` (`owns_id = True`). Converts numeric/list inputs to
+  `Const` ugens when the type string says `"U"`, builds and sends the
+  `/arco/<class>/new` O2 message. Accepts a `types_` string where `"U"` =
+  ugen input, `"i"/"f"/"s"/"d"/"B"` = literal typed value. Inputs are
+  passed as alternating `(name, value)` pairs.
+- `__del__` frees the id — but only if `owns_id` is true and the server
+  hasn't already freed it (`_server_freed`). Borrowed-id ugens (system
+  ugens, `Instrument`) are no-ops on `__del__`.
+- `play()` / `mute()` insert/remove from the output `Sum`, and pin/unpin
+  the ugen in `engine.output.members` accordingly.
+- `fade(dur)` / `fade_in(dur)` create a `Fader` wrapper for smooth
+  transitions, swap output membership, and use a `threading.Timer` to
+  release the terminated `Fader` after the fade completes.
 - `set(input_name, value)` handles scalars (updates Const in-place), arrays
   (multi-channel Const update), and Ugens (sends `repl_<input>`).
 - `atend(action)` registers end-of-life callbacks via the action system.
 - `term(dur)` enables server-side termination after the ugen ends.
 
-**Action system** — `register_action()`, `actl_act_handler()`, `Action_list`,
-`Ugen_action`. Translates Arco's `/actl/act` callbacks into Python method calls
-on target objects. Used by the instrument framework for note lifecycle.
+**Container/graph-mirroring classes** — `Sum`, `Sumb`, `Add`, `Addb`,
+`Route`, `Stdistr` track inserted ugens in `self.members` (a client-side
+mirror of the server graph); `Mix` repurposes `self.inputs` for the same
+purpose. `Thru.set_alternate`, `Recplay.borrow`, and `Wavetables.borrow`
+each pin their argument via an instance attribute (`_alternate` /
+`_lender`) so the server-side wiring can't outlive the client reference.
 
 **Implemented ugen wrappers** (all hand-written):
 
@@ -96,17 +141,22 @@ on target objects. Used by the instrument framework for note lifecycle.
 
 ### `arco_instr.py` — Instrument framework (~830 lines)
 
-Higher-level abstractions built on `arco.py`:
+Higher-level abstractions built on `arco_engine.py` / `arco_ugens.py`
+(imported via the `arco.py` re-export shim):
 
 **Parameter system** — `param()`, `param_map()`, `param_method()` declare
 named, settable parameters backed by `Const`/`Smoothb` ugens or method calls.
-Uses a construction-time stack (`_instr_stack`) collected between `instr_begin()`
-and `Instrument.__init__()`. `Param_descr` handles conditioning (clamp, map)
+Uses a construction-time stack (`_instr_stacks`, keyed by
+`threading.get_ident()` so concurrent construction on different threads
+doesn't cross-contaminate) collected between `instr_begin()` and
+`Instrument.__init__()`. `Param_descr` handles conditioning (clamp, map)
 and dispatches `set()` to the right target.
 
 **`Instrument`** — wraps a ugen graph with named parameters. Inherits `Ugen`
-but takes its ID from the output ugen (so wiring an Instrument into the graph
-is identical to wiring a plain Ugen). Holds `parameter_bindings` dict.
+but borrows its id from the output ugen via `id_num=` (so wiring an
+Instrument into the graph is identical to wiring a plain Ugen, and
+`Instrument.__del__` never frees the output ugen's id — the output ugen
+owns it). Holds `parameter_bindings` dict.
 
 **`Synth`** — polyphonic note manager. Maintains `notes` (active), `free_notes`
 (recyclable), `finishing_notes` (fading out). `noteon()` creates or reuses an
@@ -132,7 +182,59 @@ Uses NiceGUI (`nicegui` package). Features:
 - Individual demo cards for: Sine, Delay, Granstream, Fileplay, Math,
   Blend, Envelope, Fader, Mix, and others
 - Each card has sliders/controls wired to live ugen parameters
-- Connect button triggers `initialize_o2lite()`
+- Connect button constructs an `ArcoEngine()` and calls `engine.connect()`
+
+---
+
+### Ugen lifecycle model
+
+- `ArcoEngine._ugens` is a `weakref.WeakValueDictionary`. A ugen lives as
+  long as Python references it; dropping the last reference triggers
+  `__del__`, which sends `/arco/free` and returns the id to the pool.
+- Client-side references mirror the server graph: each ugen's `inputs`
+  dict holds its input ugens; container ugens (`Sum`, `Sumb`, `Add`,
+  `Addb`, `Route`, `Stdistr`) track inserted ugens in `self.members`;
+  `Mix` uses `self.inputs`. `play()` pins the ugen in
+  `engine.output.members` until `mute()` — audible implies alive.
+  `Thru.set_alternate`, `Recplay.borrow`, and `Wavetables.borrow` pin
+  their argument (`_alternate` / `_lender`) — the server-side wiring
+  must never outlive the client-side reference.
+- `owns_id`: pool-allocated ids are owned (freed by `__del__`); ugens
+  created with an explicit `id_num` (system ugens, `Instrument` wrappers
+  borrowing their output's id) never free their id and are not in the
+  registry.
+- `_server_freed`: set when the server is known to have freed the ugen
+  (terminating faders); `__del__` then skips the redundant `/arco/free`.
+- Fades: `fade()`/`fade_in()` swap output membership and release the
+  terminated `Fader` after `dur + _FADE_CLEANUP_MARGIN` via a timer.
+  A second `fade()` adjusts the in-flight fader instead of re-swapping;
+  `mute()` during a fade targets the live fader.
+- Action targets (`atend`, `register_action`) are weakrefs — the action
+  system never keeps a ugen alive; dead targets are pruned on delivery
+  and callback exceptions are isolated per dispatch.
+
+### Known follow-ups (deliberate gaps)
+
+- `term(dur)` outside the fade helpers still desyncs client pool from
+  server: the server frees the id at termination but the client slot
+  stays allocated until the Python object dies. Full fix needs
+  client-side `ACTION_FREE` handling.
+- `/actl/act` is never registered as an o2lite method handler in
+  `connect()`, so server-initiated actions (`atend`, `Instrument.finish`
+  / `Synth.is_finished` note recycling) do not fire yet.
+- `play()` during an in-flight `fade_in()` inserts the ugen at full
+  volume while the fader is still ramping — audible overlap until the
+  fade-in timer completes. `play()` could check `fade_in_lookup`.
+- A `fade()` call racing the previous fade's cleanup timer at the exact
+  firing instant can send dur/mode messages for an already-freed fader
+  id (stale message, no crash, no leak).
+- Instrument-construction contexts orphaned by an exception between
+  `instr_begin()` and `Instrument.__init__()` linger on that thread's
+  stack; if the OS reuses the thread id, the orphan can corrupt a later
+  construction (documented in code; callback wrappers should
+  catch-and-clear).
+- Remaining `print("ERROR/WARNING: ...")` calls in arco_ugens.py /
+  arco_instr.py could migrate to the `pyarco` logger for consistency.
 
 ---
 
@@ -216,16 +318,23 @@ O2lite lacks some scheduling and peer-to-peer connection management features
 of full O2, but these aren't needed for control-side work. The overhead of
 Python-side message assembly is negligible relative to complex control logic.
 
-Current initialization (from `arco.py`):
+Current initialization (from `ArcoEngine.connect()` in `arco_engine.py`):
 
 ```python
-from o2lite import O2lite
+from o2lite import O2lite  # imported lazily, inside connect()
 
-o2lite = O2lite()
-o2lite.initialize("arco", debug_flags="a")
-while o2lite.time_get() < 0:
-    o2lite.sleep(1)  # wait for host discovery
+self.o2lite = O2lite()
+self.o2lite.initialize(self.ensemble, debug_flags="a")
+while self.o2lite.time_get() < 0:
+    self.o2lite.poll()
+    time.sleep(0.01)  # wait for host discovery, bounded by self.timeout
 ```
+
+`ArcoEngine` is a context manager, so typical usage is
+`with ArcoEngine() as engine: ...` (or `engine = ArcoEngine(); engine.connect()`
+/ `engine.close()`). The `o2lite` import is deferred into `connect()` so the
+rest of the codebase (and the offline test suite) can import `arco_engine`
+without `o2litepy` installed.
 
 The `sys.path` currently points to a relative `../../o2/o2litepy/src` —
 this should eventually be a proper package dependency.
@@ -261,8 +370,11 @@ Extra process hop; good for quick prototyping only.
 
 | File | Purpose |
 |------|---------|
-| `arco.py` | Core library: O2 connection, UgenID pool, Ugen base class, all ugen wrappers, utilities |
+| `arco_engine.py` | ArcoEngine: O2 connection, weak-ref ugen registry, UgenID pool, action system; constants; conversion utilities |
+| `arco_ugens.py` | Ugen base class and ~55 ugen wrapper classes |
+| `arco.py` | Thin re-export shim over `arco_engine` + `arco_ugens` |
 | `arco_instr.py` | Instrument framework: Param system, Instrument, Synth, Note/Score, Reverb, Supersaw |
+| `python25/tests/` | Offline pytest suite (35 tests) — lifecycle, constants, actions; `FakeO2Lite` transport, no server needed |
 | `init.py` | NiceGUI demo app for interactive testing |
 
 ---
@@ -278,10 +390,11 @@ wrapper classes from these same `.ugen` descriptions.
 Either extend `u2f.py` or write a sibling script to emit `.py` files from
 `.ugen` descriptions (e.g., `arco/ugens/sine/sine.ugen` → `sine.py`).
 
-Strategy: use the existing hand-crafted wrappers in `arco.py` as the target
-template, then build the `.ugen → .py` generator modeled on what `u2f.py`
-does for Serpent. The ~55 existing wrapper classes serve as both reference and
-validation — generated output should match or improve upon them.
+Strategy: use the existing hand-crafted wrappers in `arco_ugens.py` as the
+target template, then build the `.ugen → .py` generator modeled on what
+`u2f.py` does for Serpent. The ~55 existing wrapper classes serve as both
+reference and validation — generated output should match or improve upon
+them.
 
 ### The `.ugen` DSL
 
@@ -405,10 +518,11 @@ class Sineb(Ugen):
 | `stnoisegate.ugen` | `stnoisegate(...)` | Stereo noise gate |
 | `zitarev.ugen` | `zitarev(input:2a, wet:b, gain:b, rt60:b):2a` | Zita reverb |
 
-**Not all ugens have `.ugen` files.** Many wrappers in `arco.py` (Mix, Sum,
-Route, Envelope, Wavetables, Probe, Vu, Flsyn, etc.) are hand-written because
-they have complex custom methods or don't follow the FAUST pattern. The code
-generator handles the straightforward FAUST-based ugens; the rest stay manual.
+**Not all ugens have `.ugen` files.** Many wrappers in `arco_ugens.py` (Mix,
+Sum, Route, Envelope, Wavetables, Probe, Vu, Flsyn, etc.) are hand-written
+because they have complex custom methods or don't follow the FAUST pattern.
+The code generator handles the straightforward FAUST-based ugens; the rest
+stay manual.
 
 ---
 
@@ -418,8 +532,8 @@ The core library and instrument framework are functional. Remaining work:
 
 1. **`.ugen → .py` code generator** — the main deliverable. Study `u2f.py`
    to understand the `.ugen` DSL, then write a generator that emits Python
-   wrapper classes matching the patterns established in `arco.py`. Use the
-   existing hand-written wrappers as validation targets.
+   wrapper classes matching the patterns established in `arco_ugens.py`.
+   Use the existing hand-written wrappers as validation targets.
 
 2. **Package structure** — currently a flat `python25/` directory with a
    hardcoded `sys.path` to o2litepy. Needs proper Python packaging
@@ -430,9 +544,17 @@ The core library and instrument framework are functional. Remaining work:
    describe. These will remain hand-written; the generator handles the
    straightforward cases.
 
-4. **Startup sequence** — there's no `ArcoEngine` context manager yet. The
-   demo app calls `initialize_o2lite()` directly. A proper init sequence
-   (reset, create system ugens, open audio) could be wrapped.
+4. **Startup sequence** — `ArcoEngine` now exists as a context manager
+   (`connect()` / `close()`, or `with ArcoEngine() as engine:`), replacing
+   the old direct `initialize_o2lite()` call. The demo app (`init.py`)
+   already uses it. Remaining gap: `/actl/act` is never registered as an
+   o2lite method handler in `connect()`, so server-initiated actions
+   (`atend`, `Instrument.finish`) don't fire against a live server yet —
+   see "Known follow-ups" above.
 
-5. **Testing** — no test suite exists. The NiceGUI demo serves as manual
-   integration testing against a live Arco server.
+5. **Testing** — `python25/tests/` now covers ugen lifecycle (ownership,
+   weak-ref registry, container membership, fades, borrowing), constants,
+   and the action-dispatch system offline, against a `FakeO2Lite` transport.
+   What's still untested automatically: behavior against a live Arco
+   server (message semantics the server actually enforces, timing/audio
+   correctness). That remains manual via the NiceGUI demo (`init.py`).
