@@ -234,8 +234,12 @@ class UgenID:
 
 class Ugen_action:
     def __init__(self, target, method):
-        self.target = target  # weak ref via id; caller holds strong ref
+        self.target_ref = weakref.ref(target)  # do not pin the target
         self.method = method
+
+    @property
+    def target(self):
+        return self.target_ref()
 
     def __repr__(self):
         return f"<Ugen_action {self.target} {self.method!r}>"
@@ -411,8 +415,12 @@ class ArcoEngine:
         if status & ACTION_FREE:
             self.action_dict.pop(key, None)
             return
+        live = []
         for ua in al.ugen_actions:
-            if status & al.action_mask:
-                target = ua.target
-                if target is not None and hasattr(target, ua.method):
-                    getattr(target, ua.method)(status)
+            target = ua.target
+            if target is None:
+                continue  # target was garbage-collected; drop the action
+            live.append(ua)
+            if status & al.action_mask and hasattr(target, ua.method):
+                getattr(target, ua.method)(status)
+        al.ugen_actions = live
