@@ -1,5 +1,7 @@
 import math
 import random
+import threading
+from collections import defaultdict
 
 from arco import (
     Ugen,
@@ -59,18 +61,26 @@ BOTH = 'both'
 
 # ======================== Instrument parameter framework =====================
 
-# Stack used during instrument construction (between instr_begin and
-# Instrument.__init__) to collect parameter descriptors.
-_instr_stack = []
+# Instrument-construction contexts, keyed by thread id. Each NiceGUI
+# callback runs a full instr_begin() -> Instrument.__init__() sequence on
+# one worker thread, so per-thread stacks stop concurrent constructions
+# from cross-wiring parameters. (The active engine is deliberately a
+# shared module global instead -- construction state is the exception
+# because it never crosses a callback boundary.)
+_instr_stacks = defaultdict(list)
+
+
+def _instr_stack():
+    return _instr_stacks[threading.get_ident()]
 
 
 def instr_begin():
     """Call at the start of an Instrument subclass __init__."""
-    _instr_stack.append({})
+    _instr_stack().append({})
 
 
 def _add_param_descr_to_context(pd, name):
-    context = _instr_stack[-1]
+    context = _instr_stack()[-1]
     if name in context:
         print("WARNING: Parameter", name, "is already specified. Ignored.")
     else:
@@ -177,10 +187,14 @@ class Instrument(Ugen):
                          no_msg=True,
                          id_num=output_ugen.id)
 
-        if len(_instr_stack) == 0:
+        stack = _instr_stack()
+        if not stack:
             raise RuntimeError(
-                "instr_stack is empty. Did you forget instr_begin()?")
-        self.parameter_bindings = _instr_stack.pop()
+                "instr stack is empty. Did you forget instr_begin()?")
+        self.parameter_bindings = stack.pop()
+        if not stack:
+            # don't accumulate an entry per worker thread
+            del _instr_stacks[threading.get_ident()]
 
     def get(self, input_name):
         return self.parameter_bindings.get(input_name)
