@@ -6,15 +6,12 @@ rate-guard path that used to reject c-rate Const inputs. This test drives a full
 ``noteon``/``noteoff`` cycle offline to guard against regressions.
 """
 
-import arco_instr
 from arco_instr import Supersaw_synth
 
 
 def test_supersaw_noteon_noteoff_cycle(engine):
-    # Wavetables are cached in a module global; reset so the voice is built
-    # against this test's engine and the test is order-independent.
-    arco_instr._sawtooth_waveforms = None
-
+    # get_sawtooth_waveforms() is engine-scoped and rebuilds for a new active
+    # engine, so the fresh per-test engine gets its own wavetable singleton.
     synth = Supersaw_synth({})
 
     instr = synth.noteon(60, 100)
@@ -29,8 +26,6 @@ def test_supersaw_noteon_noteoff_cycle(engine):
 
 
 def test_supersaw_multiple_voices(engine):
-    arco_instr._sawtooth_waveforms = None
-
     synth = Supersaw_synth({})
     a = synth.noteon(60, 100)
     b = synth.noteon(64, 90)
