@@ -66,10 +66,12 @@ model" below.
 
 **Action system** — `register_action()`, `actl_act_handler()`, `Action_list`,
 `Ugen_action`. Translates Arco's `/actl/act` callbacks into Python method
-calls on target objects. `Ugen_action.target` is a `weakref.ref`, so
-registering an action never keeps its target alive; `actl_act_handler`
-prunes dead targets on delivery and isolates each callback in a
-try/except so one broken handler doesn't stop the rest from firing.
+calls on target objects. `Ugen_action` holds its target via `weakref.ref`
+(`target_ref`); the `.target` property dereferences it, returning the live
+object or `None`, so registering an action never keeps its target alive.
+`actl_act_handler` prunes dead targets on delivery and isolates each
+callback in a try/except so one broken handler doesn't stop the rest from
+firing.
 
 **Constants & utilities** (unchanged from prior `arco.py`): rate symbols,
 audio params, system IDs, math/unary op enums, fade/blend/downsample mode
@@ -273,8 +275,10 @@ class builds and sends the O2 creation message automatically.
 
 ## O2: The Control Protocol
 
-All communication goes through **O2** via `o2litepy`. The global `o2lite`
-instance provides `send_cmd(address, time, type_string, *params)`.
+All communication goes through **O2** via `o2litepy`. The connection lives
+on `ArcoEngine.o2lite` (an instance attribute, set up in `connect()`); code
+sends messages via `ArcoEngine.send_cmd(address, time, type_string,
+*params)`, which no-ops if the engine isn't currently connected.
 
 ### Message Address Format
 
