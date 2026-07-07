@@ -33,3 +33,66 @@ def test_id_num_ugens_are_not_registered(engine):
     s = Sum(2, True, id_num=OUTPUT_ID)
     assert s.owns_id is False
     assert OUTPUT_ID not in engine._ugens
+
+
+from arco_ugens import Const, Sum
+
+
+def test_dropping_last_reference_frees_ugen_and_slot(engine):
+    free_before = pool_free_count(engine)
+    s = Sine(440, 0.5)
+    sid = s.id
+    del s
+    gc.collect()
+    assert ("/arco/free", "i", (sid,)) in engine.o2lite.messages
+    assert pool_free_count(engine) == free_before  # sine + consts reclaimed
+
+
+def test_container_membership_keeps_child_alive(engine):
+    mixer = Sum(1)
+    child = Sine(440, 0.1)
+    cid = child.id
+    mixer.ins(child)
+    del child
+    gc.collect()
+    assert ("/arco/free", "i", (cid,)) not in engine.o2lite.messages
+    assert engine._ugens[cid] is not None
+
+
+def test_replacing_input_releases_old_const(engine):
+    s = Sine(440, 0.5)
+    old_id = s.inputs['freq'].id
+    s.set('freq', Const(220))
+    gc.collect()
+    assert ("/arco/free", "i", (old_id,)) in engine.o2lite.messages
+
+
+def test_close_frees_survivors_and_resets_pool(engine):
+    # capture the transport first: close() sets engine.o2lite to None
+    transport = engine.o2lite
+    s = Sine(440, 0.5)
+    sid = s.id
+    engine.close()
+    assert ("/arco/free", "i", (sid,)) in transport.messages
+    assert s.engine is None
+    assert engine.o2lite is None
+
+
+def test_instrument_method_after_close_is_noop(engine):
+    instr_begin()
+    out = Sine(440, 0.5)
+    instr = Instrument("TestInstr", out)
+    engine.close()
+    instr.mute()  # engine.o2lite is None -> send_cmd no-ops; must not raise
+
+
+def test_instrument_gc_after_close_is_noop(engine):
+    transport = engine.o2lite
+    instr_begin()
+    out = Sine(440, 0.5)
+    instr = Instrument("TestInstr", out)
+    engine.close()
+    n_msgs = len(transport.messages)
+    del instr
+    gc.collect()
+    assert len(transport.messages) == n_msgs  # borrowed id: GC sends nothing

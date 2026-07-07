@@ -3,6 +3,7 @@ import sys
 import time
 import math
 import threading
+import weakref
 
 sys.path.append(
     os.path.abspath(
@@ -272,7 +273,7 @@ class ArcoEngine:
         self.timeout = timeout
         self.o2lite = None
         self.id_pool = UgenID()
-        self._ugens = {}           # id -> Ugen (strong references)
+        self._ugens = weakref.WeakValueDictionary()  # id -> Ugen (weak)
         self.action_dict = {}       # action_id -> Action_list
         self.next_action_id = 1
         self.fade_in_lookup = {}    # ugen.id -> Fader
@@ -371,7 +372,8 @@ class ArcoEngine:
             self.o2lite.poll()
 
     def register(self, ugen):
-        """Register a ugen in the engine's registry (prevents GC)."""
+        """Track a pool-allocated ugen. References are weak: a ugen lives
+        as long as user code or the client-side graph references it."""
         self._ugens[ugen.id] = ugen
 
     def unregister(self, ugen_id):
