@@ -2,10 +2,9 @@ import os
 import sys
 import math
 
+# Make the arco modules importable regardless of the working directory.
+# arco_engine handles locating o2litepy (see its header / $O2LITEPY_PATH).
 sys.path.insert(0, os.path.dirname(__file__))
-sys.path.append(
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../../../o2/o2litepy/src")))
 
 from nicegui import ui, app, run
 
@@ -1442,4 +1441,6 @@ def build_page():
 # ═══════════════════════ Entry point ═══════════════════════
 
 build_page()
-ui.run(title='Arco Demo', port=8080, reload=False)
+ui.run(title='Arco Demo',
+       port=int(os.environ.get('ARCO_DEMO_PORT', '8080')),
+       reload=False)

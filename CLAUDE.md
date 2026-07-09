@@ -44,8 +44,13 @@ The `.ugen` files are the authoritative source, not the Serpent wrappers.
   for pool-allocated ids (`owns_id`), and only when the server hasn't
   already freed it (`_server_freed`). The engine registry is weak; keep a
   Python reference (or `play()` the ugen) to keep it alive.
-- Tests: `.venv/bin/python -m pytest python25/tests -v` (offline, no Arco
-  server needed — FakeO2Lite records messages).
+- Tests: `.venv/bin/python -m pytest python25/tests tests -v` (offline, no
+  Arco server needed — FakeO2Lite records messages; the root `tests/` suite
+  covers the ugen2py code generator).
+- Demo site: `.venv/bin/python python25/init.py`, then open
+  http://localhost:8080 (`ARCO_DEMO_PORT` overrides the port). Starts
+  without an Arco server. o2litepy location: `$O2LITEPY_PATH` or a sibling
+  `../o2` checkout (see README.md).
 - Many ugens have audio/block rate pairs (e.g. `Sine`/`Sineb`, `Math`/`Mathb`).
   Block-rate variants enforce rate checks at construction.
 
