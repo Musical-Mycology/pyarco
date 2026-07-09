@@ -343,8 +343,10 @@ while self.o2lite.time_get() < 0:
 rest of the codebase (and the offline test suite) can import `arco_engine`
 without `o2litepy` installed.
 
-The `sys.path` currently points to a relative `../../o2/o2litepy/src` —
-this should eventually be a proper package dependency.
+`arco_engine` locates o2litepy in this order: already importable (e.g. on
+`PYTHONPATH`), the `$O2LITEPY_PATH` environment variable, then a sibling
+checkout at `../../o2/o2litepy/src` relative to `python25/`. This should
+eventually be a proper package dependency.
 
 ### Fallback options
 
@@ -542,9 +544,9 @@ The core library and instrument framework are functional. Remaining work:
    wrapper classes matching the patterns established in `arco_ugens.py`.
    Use the existing hand-written wrappers as validation targets.
 
-2. **Package structure** — currently a flat `python25/` directory with a
-   hardcoded `sys.path` to o2litepy. Needs proper Python packaging
-   (`pyproject.toml`, `o2litepy` as a dependency).
+2. **Package structure** — currently a flat `python25/` directory locating
+   o2litepy via `$O2LITEPY_PATH` or a sibling `../o2` checkout. Needs
+   proper Python packaging (`pyproject.toml`, `o2litepy` as a dependency).
 
 3. **Non-generated ugen classes** — some wrappers (Mix, Sum, Route, Envelope
    subclasses, Wavetables) have custom methods beyond what `.ugen` files

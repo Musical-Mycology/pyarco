@@ -1,8 +1,12 @@
-# Development / test dependencies for PyArco.
+# Development dependencies for PyArco: test suite + demo site.
 #
 # Install into the project venv:
 #     .venv/bin/pip install -r requirements-dev.txt
 #
-# Run the offline test suite:
-#     .venv/bin/python -m pytest python25/tests -v
+# Run the offline test suites (no Arco server needed):
+#     .venv/bin/python -m pytest python25/tests tests -v
+#
+# Launch the demo site (see README.md):
+#     .venv/bin/python python25/init.py
 pytest>=8.0
+nicegui>=1.4

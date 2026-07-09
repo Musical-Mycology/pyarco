@@ -4,9 +4,17 @@ import time
 import math
 import weakref
 
-sys.path.append(
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../../o2/o2litepy/src")))
+# o2litepy is not published on PyPI; it ships inside a checkout of the o2
+# repository (https://github.com/rbdannenberg/o2). Resolution order for the
+# `o2lite` module: an already-importable copy (e.g. pip-installed or on
+# PYTHONPATH) wins, then $O2LITEPY_PATH, then a checkout of o2 sitting next
+# to this repository. The import itself is deferred to ArcoEngine.connect()
+# so everything except live use works without o2litepy present.
+_o2litepy_path = os.environ.get(
+    "O2LITEPY_PATH",
+    os.path.join(os.path.dirname(__file__), "../../o2/o2litepy/src"))
+if os.path.isdir(_o2litepy_path):
+    sys.path.append(os.path.abspath(_o2litepy_path))
 
 ZERO_ID = 0  # a single-channel audio source of zero (silence)
 ZEROB_ID = 1  # a single-channel block-rate source of zero
