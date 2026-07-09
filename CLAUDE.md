@@ -38,7 +38,12 @@ The `.ugen` files are the authoritative source, not the Serpent wrappers.
   (auto-wraps numbers in Const), `"i"/"f"/"s"/"d"/"B"` = literal values.
   Inputs passed as alternating `(name, value)` pairs after the type string.
 - UgenID pool: 1000 slots, user IDs start at 100. System IDs 0–3 are reserved
-  (Zero, Zerob, Input, Output).
+  (Zero, Zerob, Input, Output) and owned by the *server*.
+- `ArcoEngine.connect()` attaches non-destructively: no `/arco/reset`, and
+  the server's output ugen (ID 3) is never freed/replaced. The play/mute
+  `Sum` lives at a pool id, spliced in via `/arco/thru/repl_input` (one
+  atomic message → no server warnings). Server audio must be started
+  before connecting; `engine.output.id` is a pool id, not `OUTPUT_ID`.
 - O2 messages: `/arco/<classname_lowercase>/<method>` with typed params.
 - `__del__` sends `/arco/free` and returns the ID to the pool — but only
   for pool-allocated ids (`owns_id`), and only when the server hasn't
@@ -50,7 +55,15 @@ The `.ugen` files are the authoritative source, not the Serpent wrappers.
 - Demo site: `.venv/bin/python python25/init.py`, then open
   http://localhost:8080 (`ARCO_DEMO_PORT` overrides the port). Starts
   without an Arco server. o2litepy location: `$O2LITEPY_PATH` or a sibling
-  `../o2` checkout (see README.md).
+  `../o2` checkout (see README.md). The demo polls O2 via a NiceGUI
+  `app.timer` — o2lite clients that stop polling get dropped by the server.
+  The page layout MUST stay behind `@ui.page('/')`: NiceGUI 3 "script
+  mode" (no page decorator) re-executes the whole module per browser
+  client — each tab then gets its own engine and they corrupt each
+  other's server ugens.
+- Live audio: run `arcobasic` from its own directory and press `S` in its
+  terminal UI to start audio before connecting (see README.md "Validating
+  against a live Arco server", including known harmless warnings).
 - Many ugens have audio/block rate pairs (e.g. `Sine`/`Sineb`, `Math`/`Mathb`).
   Block-rate variants enforce rate checks at construction.
 

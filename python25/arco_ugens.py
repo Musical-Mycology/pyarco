@@ -110,18 +110,20 @@ class Ugen:
 
     def play(self):
         output = self.engine.output
+        out_id = output.id if output is not None else OUTPUT_ID
         if output is not None:
             output.members[self.id] = self
-        self.engine.send_cmd("/arco/sum/ins", 0, "ii", OUTPUT_ID, self.id)
+        self.engine.send_cmd("/arco/sum/ins", 0, "ii", out_id, self.id)
 
     def mute(self, status=None):
         # status is accepted (passed by atend actions) but ignored here
         # If a fade-out is in flight, the Fader is what's in the output.
         target = self._fade_out or self
         output = self.engine.output
+        out_id = output.id if output is not None else OUTPUT_ID
         if output is not None:
             output.members.pop(target.id, None)
-        self.engine.send_cmd("/arco/sum/rem", 0, "ii", OUTPUT_ID, target.id)
+        self.engine.send_cmd("/arco/sum/rem", 0, "ii", out_id, target.id)
 
     def fade(self, dur, mode=FADE_SMOOTH):
         """Fade output to zero over dur seconds, then disconnect."""
@@ -143,11 +145,12 @@ class Ugen:
         faded = create_fader(self, 1, dur, 0)
         faded.term()
         output = self.engine.output
+        out_id = output.id if output is not None else OUTPUT_ID
         if output is not None:
             output.members.pop(self.id, None)
             output.members[faded.id] = faded
         # swap self out of output, put faded in
-        self.engine.send_cmd("/arco/sum/swap", 0, "iii", OUTPUT_ID,
+        self.engine.send_cmd("/arco/sum/swap", 0, "iii", out_id,
                              self.id, faded.id)
         faded.set_mode(mode)
         self._fade_out = faded
@@ -183,7 +186,9 @@ class Ugen:
             f = engine.fade_in_lookup.pop(self.id, None)
             if f is not None:
                 # swap fader out, put the original ugen directly in output
-                engine.send_cmd("/arco/sum/swap", 0, "iii", OUTPUT_ID,
+                output = engine.output
+                out_id = output.id if output is not None else OUTPUT_ID
+                engine.send_cmd("/arco/sum/swap", 0, "iii", out_id,
                                 f.id, self.id)
                 f._server_freed = True
                 output = engine.output

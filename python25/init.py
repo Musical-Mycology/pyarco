@@ -1,6 +1,7 @@
 import os
 import sys
 import math
+import threading
 
 # Make the arco modules importable regardless of the working directory.
 # arco_engine handles locating o2litepy (see its header / $O2LITEPY_PATH).
@@ -102,6 +103,8 @@ class DemoState:
         self.engine = None
         self.active_ugens = {}  # tag -> {'ugen': Ugen, 'playing': bool, ...}
         self._counter = 0
+        self._connect_lock = threading.Lock()
+        self._connect_error = None
 
     def tag(self, prefix="ugen"):
         self._counter += 1
@@ -123,17 +126,73 @@ class DemoState:
         return entry
 
     def connect(self):
-        if not self.connected:
+        with self._connect_lock:
+            print(f'DemoState.connect: connected={self.connected} '
+                  f'engine={self.engine!r} id(state)={id(self):#x} '
+                  f'thread={threading.current_thread().name}')
+            if self.connected:
+                return True
             try:
+                if self.engine is not None:
+                    # A previous engine exists (lost connection or stale
+                    # flag). Close it FIRST so its server-side ugens are
+                    # freed -- attaching a fresh engine over live leftovers
+                    # collides on pool ids and the server nukes the shared
+                    # id ("uninitialized id" -> all sum inserts ignored).
+                    print('DemoState.connect: closing stale engine before '
+                          'reconnecting')
+                    self.active_ugens.clear()
+                    try:
+                        self.engine.close()
+                    except Exception as e:
+                        print('DemoState.connect: stale close failed:', e)
+                    self.engine = None
                 self.engine = ArcoEngine()
                 self.engine.connect()
                 self.connected = True
             except Exception as e:
                 self._connect_error = str(e)
-        return self.connected
+                self.engine = None
+            return self.connected
 
 
 state = DemoState()
+print(f'init.py module executed: __name__={__name__} '
+      f'id(state)={id(state):#x} pid={os.getpid()}')
+
+# ═══════════════════════ O2 polling ═══════════════════════
+
+# o2lite clients must poll continuously: poll() answers the server's
+# clock-sync pings and reads incoming messages. Without it the Arco
+# server drops the connection within seconds of connect().
+POLL_INTERVAL = 0.02  # seconds
+
+
+def _poll_arco():
+    if state.connected and state.engine is not None:
+        try:
+            state.engine.poll()
+        except Exception as e:
+            state.connected = False
+            print('Arco polling failed; marking disconnected:', e)
+
+
+_poll_timer = app.timer(POLL_INTERVAL, _poll_arco)
+
+
+def _shutdown_arco():
+    """Free our ugens and detach on exit. Without this, a restarted demo
+    collides with the dead session's server-side ugens (same pool ids) and
+    the server rejects sum inserts -- connected but silent."""
+    if state.engine is not None:
+        state.connected = False
+        try:
+            state.engine.close()
+        except Exception as e:
+            print('Arco shutdown cleanup failed:', e)
+
+
+app.on_shutdown(_shutdown_arco)
 
 # ═══════════════════════ UI helpers ═══════════════════════
 
@@ -146,6 +205,7 @@ def status_chip(playing: bool):
 
 def ensure_connected():
     if not state.connected:
+        print(f'ensure_connected: NOT connected, id(state)={id(state):#x}')
         ui.notify('Not connected to Arco server. Click Connect first.',
                   type='warning')
         return False
@@ -1347,6 +1407,12 @@ def velocity_demo():
 # ═══════════════════════ Page layout ═══════════════════════
 
 
+# @ui.page makes this a per-client page BUILDER while the module (state,
+# engine, poll timer) loads exactly once. Without it, NiceGUI 3 "script
+# mode" re-executes this whole file for EVERY browser client -- each tab
+# then gets its own DemoState/engine, they collide on server ugen ids,
+# and one tab's Connect silently breaks another tab's audio.
+@ui.page('/')
 def build_page():
     ui.colors(primary='#1976D2', secondary='#424242', accent='#82B1FF')
 
@@ -1354,21 +1420,21 @@ def build_page():
         ui.label('Arco Interactive Demo').classes(
             'text-h5 text-white font-bold')
         with ui.row().classes('items-center gap-4'):
-            conn_label = ui.label('Disconnected').classes('text-white text-sm')
+            # Bound, not set_text: reflects true state even after the
+            # browser reloads while the engine stays connected.
+            conn_label = ui.label().classes('text-white text-sm')
+            conn_label.bind_text_from(
+                state, 'connected',
+                backward=lambda c: 'Connected' if c else 'Disconnected')
 
             async def do_connect():
-                conn_label.set_text('Connecting...')
                 state._connect_error = None
                 await run.io_bound(state.connect)
                 if state.connected:
-                    conn_label.set_text('Connected')
                     ui.notify('Connected to Arco server', type='positive')
                 elif state._connect_error:
-                    conn_label.set_text('Disconnected')
                     ui.notify(f'Connection failed: {state._connect_error}',
                               type='negative')
-                else:
-                    conn_label.set_text('Disconnected')
 
             ui.button('Connect', on_click=do_connect) \
                 .props('color=white text-color=primary dense')
@@ -1440,7 +1506,8 @@ def build_page():
 
 # ═══════════════════════ Entry point ═══════════════════════
 
-build_page()
-ui.run(title='Arco Demo',
-       port=int(os.environ.get('ARCO_DEMO_PORT', '8080')),
-       reload=False)
+if __name__ in {'__main__', '__mp_main__'}:
+    # build_page is NOT called here: @ui.page('/') builds it per client.
+    ui.run(title='Arco Demo',
+           port=int(os.environ.get('ARCO_DEMO_PORT', '8080')),
+           reload=False)

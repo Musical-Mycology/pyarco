@@ -315,18 +315,14 @@ class ArcoEngine:
         print("Connected to ensemble", self.ensemble,
               "O2time", self.o2lite.time_get())
 
-        # Reset Arco — the host creates system ugens at IDs 0-3 as Thru's.
-        self.o2lite.send_cmd("/arco/reset", 0, "")
-        for _ in range(100):
-            self.o2lite.poll()
-            time.sleep(0.01)
-
         # Set as active engine BEFORE creating system ugens
         global _active_engine
         _active_engine = self
 
-        # System ugen shadows (no_msg=True -- host already created them).
-        # Use id_num to avoid wasting pool slots.
+        # Attach non-destructively: the server app owns the system ugens
+        # at IDs 0-3, created when it starts audio -- start audio in the
+        # server BEFORE connecting. No /arco/reset here: a running server
+        # refuses it and broadcasts warnings. Shadows use no_msg=True.
         self.zero = Ugen("Zero", 1, A_RATE, "", no_msg=True,
                          engine=self, id_num=ZERO_ID)
         self.zerob = Ugen("Zerob", 1, B_RATE, "", no_msg=True,
@@ -334,16 +330,25 @@ class ArcoEngine:
         self.input = Ugen("Thru", self.input_chans, A_RATE, "", no_msg=True,
                           engine=self, id_num=INPUT_ID)
 
-        # Replace host's Thru at OUTPUT_ID with a Sum (play/mute need it).
-        self.o2lite.send_cmd("/arco/free", 0, "i", OUTPUT_ID)
-        self.output = Sum(self.output_chans, True, OUTPUT_ID)
+        # play/mute need a Sum. Never free/replace the ugen at OUTPUT_ID
+        # (the audio callback reads it every block and warns during the
+        # free/create gap); instead splice a pool-id Sum in as the output
+        # Thru's input -- one atomic message, so the server stays silent.
+        self.output = Sum(self.output_chans, True)
+        self.o2lite.send_cmd("/arco/thru/repl_input", 0, "ii",
+                             OUTPUT_ID, self.output.id)
 
-        print("Arco initialized: system ugens created")
+        print("Arco attached: output Sum is ugen", self.output.id)
 
     def close(self):
         """Free all ugens, disconnect, and clear active engine."""
         if self.o2lite is None:
             return
+        # Detach our Sum from the output Thru (restore silence) so freeing
+        # it below fully releases it server-side.
+        if self.output is not None:
+            self.send_cmd("/arco/thru/repl_input", 0, "ii",
+                          OUTPUT_ID, ZERO_ID)
         # Free pool-allocated ugens in reverse id order
         for ugen_id, ugen in sorted(list(self._ugens.items()), reverse=True):
             self.send_cmd("/arco/free", 0, "i", ugen_id)

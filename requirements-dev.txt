@@ -10,3 +10,6 @@
 #     .venv/bin/python python25/init.py
 pytest>=8.0
 nicegui>=1.4
+# Required by o2litepy for live Arco connections (not needed for tests):
+netifaces>=0.11
+zeroconf>=0.130
